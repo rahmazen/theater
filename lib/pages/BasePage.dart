@@ -3,7 +3,6 @@ import 'package:theater/pages/ContentPage.dart';
 import 'package:theater/pages/TheaterHomePage.dart';
 import 'package:theater/pages/TicketHistoryPage.dart';
 import 'package:theater/pages/profile_page.dart';
-import 'package:theater/pages/settings_page.dart';
 import '../crystal_navigation_bar/crystal_navigation_bar.dart';
 
 
