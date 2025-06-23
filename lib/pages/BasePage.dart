@@ -6,7 +6,6 @@ import 'package:theater/pages/profile_page.dart';
 import 'package:theater/pages/settings_page.dart';
 import '../crystal_navigation_bar/crystal_navigation_bar.dart';
 
-// Import your individual pages here
 
 
 class BasePage extends StatefulWidget {
