@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/status.dart' as status;
 
 import 'package:theater/pages/payement/TicketPage.dart';
 
@@ -23,19 +25,23 @@ class Seat {
   });
 
   factory Seat.fromJson(Map<String, dynamic> json) {
+
     return Seat(
       seatNumber: json['seat_number'],
       row: json['row'],
       column: json['column'],
       type: json['type'],
-      price: double.parse(json['ticket_price'].toString()),
+      price: double.parse(json['price']),
+
       status: json['status'] ?? 'available',
     );
   }
 }
+
 class CinemaSeatSelectionPage extends StatefulWidget {
   final Map<String, dynamic>? event;
-  final String? replays ;
+  final String? replays;
+
   const CinemaSeatSelectionPage({
     Key? key,
     this.event,
@@ -51,24 +57,111 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
   Seat? selectedSeat;
   String selectedDate = '';
   String selectedTime = '';
+  String? selectedReplayId;
   bool isLoading = true;
+
+  // WebSocket related variables
+  WebSocketChannel? _webSocketChannel;
+  bool _isConnected = false;
 
   @override
   void initState() {
     super.initState();
     _loadSeats(widget.event!['id'].toString());
+  }
 
+  @override
+  void dispose() {
+    _disconnectWebSocket();
+    super.dispose();
+  }
+
+  // WebSocket connection methods
+  Future<void> _connectWebSocket(String eventId) async {
+    try {
+      _webSocketChannel = WebSocketChannel.connect(
+        Uri.parse('ws://127.0.0.1:8000/ws/seats/$eventId/'),
+      );
+      _isConnected = true;
+
+      print('WebSocket connected for event: $eventId');
+
+      _webSocketChannel!.stream.listen(
+            (data) {
+          _handleWebSocketMessage(data);
+        },
+        onError: (error) {
+          print('WebSocket error: $error');
+          setState(() {
+            _isConnected = false;
+          });
+        },
+        onDone: () {
+          print('WebSocket connection closed');
+          setState(() {
+            _isConnected = false;
+          });
+        },
+      );
+    } catch (e) {
+      print('Failed to connect WebSocket: $e');
+      setState(() {
+        _isConnected = false;
+      });
+    }
+  }
+
+  void _handleWebSocketMessage(dynamic data) {
+    try {
+      final message = json.decode(data);
+
+      if (message['type'] == 'seat_booked') {
+        final bookedSeatId = message['seat_id'].toString();
+        _updateSeatStatus(bookedSeatId, 'reserved');
+      }
+      // Handle other message types as needed
+    } catch (e) {
+      print('Error parsing WebSocket message: $e');
+    }
+  }
+
+  void _updateSeatStatus(String seatId, String newStatus) {
+    setState(() {
+      final seatIndex = seats.indexWhere((seat) => seat.seatNumber.toString() == seatId);
+      if (seatIndex != -1) {
+        seats[seatIndex].status = newStatus;
+
+        // If the booked seat was our selected seat, deselect it
+        if (selectedSeat?.seatNumber.toString() == seatId) {
+          selectedSeat = null;
+        }
+      }
+    });
+  }
+
+  void _disconnectWebSocket() {
+    if (_webSocketChannel != null) {
+      _webSocketChannel!.sink.close(status.goingAway);
+      _webSocketChannel = null;
+      setState(() {
+        _isConnected = false;
+      });
+    }
   }
 
   Future<void> _loadSeats(String id) async {
     setState(() {
       isLoading = true;
     });
-print ('leading seats for event id : ${id}');
+
+    // Disconnect existing WebSocket connection
+    _disconnectWebSocket();
+
+    print('Loading seats for event id: $id');
+
     try {
-      // Replace with your actual API endpoint
       final response = await http.get(
-        Uri.parse('http://127.0.0.1:8000/client/seats/${id}'),
+        Uri.parse('http://127.0.0.1:8000/client/seats/$id'),
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -80,20 +173,60 @@ print ('leading seats for event id : ${id}');
               .toList();
           isLoading = false;
         });
+
+        // Connect WebSocket after successfully loading seats
+        await _connectWebSocket(id);
       } else {
-        // Handle error - for demo, load sample data
         _loadSampleData();
       }
     } catch (e) {
-      // Handle network error - for demo, load sample data
+      print('Error loading seats: $e');
       _loadSampleData();
     }
   }
 
+
+  Future<void> createTicket() async {
+    setState(() {
+      isLoading = true;
+    });
+    print(selectedSeat?.seatNumber);
+    print(selectedReplayId );
+
+    try {
+      final response = await http.post(  // Changed to POST
+      Uri.parse('http://127.0.0.1:8000/client/book/'),
+          headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({  // JSON encode the body
+    'seat_id': selectedSeat?.seatNumber,  // Assuming you want the seat ID
+    'event_id': selectedReplayId  // Make sure this is the correct ID
+    }),
+    );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TicketPage(ticketData: data,),
+            ),
+          );
+        });
+
+
+      } else {
+        print('yikes');
+      }
+    } catch (e) {
+      print('Error creating ticket: $e');
+
+    }
+  }
+
+
   void _loadSampleData() {
-    // Sample data matching your JSON structure
     List<Seat> sampleSeats = [
-      // Row 1
       Seat(seatNumber: 1, row: 1, column: 1, type: "vip", price: 500.00, status: "available"),
       Seat(seatNumber: 27, row: 4, column: 3, type: "regular", price: 200.00, status: "available"),
       Seat(seatNumber: 28, row: 4, column: 4, type: "regular", price: 200.00, status: "reserved"),
@@ -104,6 +237,7 @@ print ('leading seats for event id : ${id}');
       isLoading = false;
     });
   }
+
   List<Map<String, String>> parseUpcomingReplays(String upcomingReplays) {
     List<Map<String, String>> replays = [];
 
@@ -122,7 +256,6 @@ print ('leading seats for event id : ${id}');
         String time = match.group(2)!;
         String id = match.group(3)!;
 
-        // Convert date to weekday format
         String weekday = _getWeekdayFromDate(date);
         String day = date.split('/')[0];
 
@@ -139,16 +272,15 @@ print ('leading seats for event id : ${id}');
 
     return replays;
   }
+
   String _getWeekdayFromDate(String date) {
-    // This is a simple example - you should use proper date parsing
-    // For now, returning sample weekdays based on day numbers
     List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     int day = int.parse(date.split('/')[0]);
-    return weekdays[(day - 1) % 7]; // Simple mapping, replace with proper date logic
+    return weekdays[(day - 1) % 7];
   }
 
   List<Map<String, String>> getUniqueDates() {
-    List<Map<String, String>> replays = parseUpcomingReplays(widget.replays ??'');
+    List<Map<String, String>> replays = parseUpcomingReplays(widget.replays ?? '');
     Map<String, Map<String, String>> uniqueDates = {};
     for (var replay in replays) {
       String dateKey = replay['dateKey']!;
@@ -164,13 +296,11 @@ print ('leading seats for event id : ${id}');
     return uniqueDates.values.toList();
   }
 
-// Get times for selected date
   List<Map<String, String>> getTimesForDate(String selectedDateKey) {
     List<Map<String, String>> replays = parseUpcomingReplays(widget.replays ?? '');
     return replays.where((replay) => replay['dateKey'] == selectedDateKey).toList();
   }
 
-// Format time for display (convert 24h to 12h format)
   String formatTimeForDisplay(String time24) {
     List<String> parts = time24.split(':');
     int hour = int.parse(parts[0]);
@@ -183,19 +313,26 @@ print ('leading seats for event id : ${id}');
   }
 
   void _toggleSeat(Seat seat) {
-    if (seat.status == 'reserved') return;
+    if (seat.status == 'reserved') {
+      // Show a message that the seat is already taken
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('This seat is already taken'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
 
     setState(() {
-      // If clicking the same selected seat, deselect it
       if (selectedSeat?.seatNumber == seat.seatNumber) {
         selectedSeat!.status = 'available';
         selectedSeat = null;
       } else {
-        // Deselect previously selected seat if any
         if (selectedSeat != null) {
           selectedSeat!.status = 'available';
         }
-        // Select new seat (only one seat can be selected)
         seat.status = 'selected';
         selectedSeat = seat;
       }
@@ -203,13 +340,11 @@ print ('leading seats for event id : ${id}');
   }
 
   List<List<Seat>> _buildSeatGrid() {
-    // Group seats by row
     Map<int, List<Seat>> seatsByRow = {};
     for (var seat in seats) {
       seatsByRow.putIfAbsent(seat.row, () => []).add(seat);
     }
 
-    // Sort rows and columns
     List<int> sortedRows = seatsByRow.keys.toList()..sort();
     List<List<Seat>> grid = [];
 
@@ -240,7 +375,28 @@ print ('leading seats for event id : ${id}');
         return Colors.grey[500]!;
     }
   }
+  double calculatePrice() {
+    // Print selectedSeat price value and type
+    var seatPrice = selectedSeat?.price;
+    print('selectedSeat price value: $seatPrice');
+    print('selectedSeat price type: ${seatPrice.runtimeType}');
 
+    // Print widget.event ticket_price value and type
+    var ticketPrice = widget.event?['ticket_price'];
+    print('ticket_price value: $ticketPrice');
+    print('ticket_price type: ${ticketPrice.runtimeType}');
+
+    // Convert to double and calculate
+    double seatPriceDouble = (seatPrice as int?)?.toDouble() ?? 0.0;
+    double ticketPriceDouble = double.tryParse(ticketPrice as String? ?? '0') ?? 0.0;
+
+    double totalPrice = seatPriceDouble + ticketPriceDouble;
+
+    print('Total calculated price: $totalPrice');
+
+    return totalPrice;
+
+  }
   @override
   Widget build(BuildContext context) {
     final seatGrid = _buildSeatGrid();
@@ -250,7 +406,7 @@ print ('leading seats for event id : ${id}');
       body: SafeArea(
         child: Column(
           children: [
-            // Header
+            // Header with connection status
             Padding(
               padding: EdgeInsets.all(20),
               child: Row(
@@ -266,13 +422,39 @@ print ('leading seats for event id : ${id}');
                   ),
                   Expanded(
                     child: Center(
-                      child: Text(
-                        widget.event?['content']['title'],
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      child: Column(
+                        children: [
+                          Text(
+                            widget.event?['content']['title'],
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: _isConnected ? Colors.green : Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                _isConnected ? 'Live' : 'Offline',
+                                style: GoogleFonts.poppins(
+                                  color: _isConnected ? Colors.green : Colors.red,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -299,7 +481,7 @@ print ('leading seats for event id : ${id}');
 
             SizedBox(height: 20),
 
-// Time selection - only show times for selected date
+            // Time selection
             Container(
               height: 50,
               margin: EdgeInsets.symmetric(horizontal: 20),
@@ -325,7 +507,6 @@ print ('leading seats for event id : ${id}');
                 ),
               ),
             ),
-
 
             SizedBox(height: 30),
 
@@ -379,7 +560,7 @@ print ('leading seats for event id : ${id}');
 
             SizedBox(height: 20),
 
-            // Price display (only show if a seat is selected)
+            // Price display
             if (selectedSeat != null)
               Container(
                 padding: EdgeInsets.all(16),
@@ -411,10 +592,8 @@ print ('leading seats for event id : ${id}');
                         ),
                       ],
                     ),
-
                     Text(
-                      '${selectedSeat!.price + double.parse(widget.event?['price'] ??'0' )} DZD',
-
+                     "${calculatePrice()} DZD",
                       style: GoogleFonts.poppins(
                         color: Colors.red,
                         fontSize: 18,
@@ -444,11 +623,8 @@ print ('leading seats for event id : ${id}');
               margin: EdgeInsets.fromLTRB(20, 10, 20, 30),
               child: ElevatedButton(
                 onPressed: selectedSeat != null ? () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => TicketPage(),
-                    ), );
+                  createTicket();
+
                 } : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
@@ -478,7 +654,6 @@ print ('leading seats for event id : ${id}');
   }
 
   Widget _buildSeat(Seat seat) {
-    bool isVIP = seat.type == 'vip';
     bool isClickable = seat.status != 'reserved';
 
     return GestureDetector(
@@ -519,12 +694,13 @@ print ('leading seats for event id : ${id}');
       ],
     );
   }
+
   Widget _buildDateItem(String weekday, String day, {bool isSelected = false}) {
     return GestureDetector(
       onTap: () {
         setState(() {
           selectedDate = '$weekday-$day';
-          selectedTime = ''; // Reset time selection when date changes
+          selectedTime = '';
         });
         _loadSeats(selectedReplayId!);
       },
@@ -560,7 +736,7 @@ print ('leading seats for event id : ${id}');
       ),
     );
   }
-String? selectedReplayId ;
+
   Widget _buildTimeItem(String time, {bool isSelected = false, String? replayId}) {
     return GestureDetector(
       onTap: () {
@@ -588,9 +764,6 @@ String? selectedReplayId ;
       ),
     );
   }
-
-
-
 }
 
 class CurvedScreenPainter extends CustomPainter {

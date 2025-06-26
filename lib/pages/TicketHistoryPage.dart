@@ -28,12 +28,7 @@ class TicketHistoryPage extends StatelessWidget {
             padding: EdgeInsets.only(bottom: 16),
             child: GestureDetector(
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TicketPage(),
-                  ),
-                );
+
               },
               child: TicketCard(ticket: ticket),
             )
