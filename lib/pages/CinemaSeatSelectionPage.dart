@@ -26,17 +26,18 @@ class Seat {
       row: json['row'],
       column: json['column'],
       type: json['type'],
-      price: double.parse(json['price'].toString()),
+      price: double.parse(json['ticket_price'].toString()),
       status: json['status'] ?? 'available',
     );
   }
 }
 class CinemaSeatSelectionPage extends StatefulWidget {
   final Map<String, dynamic>? event;
-
+  final String? replays ;
   const CinemaSeatSelectionPage({
     Key? key,
     this.event,
+    this.replays
   }) : super(key: key);
 
   @override
@@ -47,24 +48,25 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
   List<Seat> seats = [];
   Seat? selectedSeat;
   String selectedDate = '';
-  String selectedTime = '8:30 PM';
+  String selectedTime = '';
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadSeats();
+    _loadSeats(widget.event!['id'].toString());
+
   }
 
-  Future<void> _loadSeats() async {
+  Future<void> _loadSeats(String id) async {
     setState(() {
       isLoading = true;
     });
-
+print ('leading seats for event id : ${id}');
     try {
       // Replace with your actual API endpoint
       final response = await http.get(
-        Uri.parse('http://127.0.0.1:8000/client/seats/${widget.event?['id']}'),
+        Uri.parse('http://127.0.0.1:8000/client/seats/${id}'),
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -111,6 +113,83 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
       seats = sampleSeats;
       isLoading = false;
     });
+  }
+  List<Map<String, String>> parseUpcomingReplays(String upcomingReplays) {
+    List<Map<String, String>> replays = [];
+
+    if (upcomingReplays.isEmpty) return replays;
+
+    List<String> replayParts = upcomingReplays.split(',');
+
+    for (String part in replayParts) {
+      part = part.trim();
+
+      RegExp regex = RegExp(r'(\d{2}/\d{2})\s+(\d{2}:\d{2})\s+\(id:(\d+)\)');
+      Match? match = regex.firstMatch(part);
+
+      if (match != null) {
+        String date = match.group(1)!;
+        String time = match.group(2)!;
+        String id = match.group(3)!;
+
+        // Convert date to weekday format
+        String weekday = _getWeekdayFromDate(date);
+        String day = date.split('/')[0];
+
+        replays.add({
+          'date': date,
+          'weekday': weekday,
+          'day': day,
+          'time': time,
+          'id': id,
+          'dateKey': '$weekday-$day',
+        });
+      }
+    }
+
+    return replays;
+  }
+  String _getWeekdayFromDate(String date) {
+    // This is a simple example - you should use proper date parsing
+    // For now, returning sample weekdays based on day numbers
+    List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    int day = int.parse(date.split('/')[0]);
+    return weekdays[(day - 1) % 7]; // Simple mapping, replace with proper date logic
+  }
+
+  List<Map<String, String>> getUniqueDates() {
+    List<Map<String, String>> replays = parseUpcomingReplays(widget.replays ??'');
+    Map<String, Map<String, String>> uniqueDates = {};
+    for (var replay in replays) {
+      String dateKey = replay['dateKey']!;
+      if (!uniqueDates.containsKey(dateKey)) {
+        uniqueDates[dateKey] = {
+          'weekday': replay['weekday']!,
+          'day': replay['day']!,
+          'dateKey': dateKey,
+        };
+      }
+    }
+
+    return uniqueDates.values.toList();
+  }
+
+// Get times for selected date
+  List<Map<String, String>> getTimesForDate(String selectedDateKey) {
+    List<Map<String, String>> replays = parseUpcomingReplays(widget.replays ?? '');
+    return replays.where((replay) => replay['dateKey'] == selectedDateKey).toList();
+  }
+
+// Format time for display (convert 24h to 12h format)
+  String formatTimeForDisplay(String time24) {
+    List<String> parts = time24.split(':');
+    int hour = int.parse(parts[0]);
+    int minute = int.parse(parts[1]);
+
+    String period = hour >= 12 ? 'PM' : 'AM';
+    int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+
+    return '${displayHour}:${minute.toString().padLeft(2, '0')} $period';
   }
 
   void _toggleSeat(Seat seat) {
@@ -218,33 +297,45 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
               margin: EdgeInsets.symmetric(horizontal: 20),
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                children: [
-                  _buildDateItem('Thu', '09', isSelected: selectedDate == 'Thu-09'),
-                  _buildDateItem('Fri', '10', isSelected: selectedDate == 'Fri-10'),
-                  _buildDateItem('Sat', '11', isSelected: selectedDate == 'Sat-11'),
-                  _buildDateItem('Sun', '12', isSelected: selectedDate == 'Sun-12'),
-                  _buildDateItem('Mon', '13', isSelected: selectedDate == 'Mon-13'),
-                  _buildDateItem('Tue', '14', isSelected: selectedDate == 'Tue-14'),
-                ],
+                children: getUniqueDates().map((dateInfo) =>
+                    _buildDateItem(
+                        dateInfo['weekday']!,
+                        dateInfo['day']!,
+                        isSelected: selectedDate == dateInfo['dateKey']
+                    )
+                ).toList(),
               ),
             ),
 
             SizedBox(height: 20),
 
-            // Time selection
+// Time selection - only show times for selected date
             Container(
               height: 50,
               margin: EdgeInsets.symmetric(horizontal: 20),
-              child: ListView(
+              child: selectedDate.isNotEmpty
+                  ? ListView(
                 scrollDirection: Axis.horizontal,
-                children: [
-                  _buildTimeItem('10:30 AM'),
-                  _buildTimeItem('11:30 AM'),
-                  _buildTimeItem('1:30 PM'),
-                  _buildTimeItem('8:30 PM', isSelected: selectedTime == '8:30 PM'),
-                ],
+                children: getTimesForDate(selectedDate).map((timeInfo) {
+                  String displayTime = formatTimeForDisplay(timeInfo['time']!);
+                  return _buildTimeItem(
+                      displayTime,
+                      replayId: timeInfo['id']!,
+                      isSelected: selectedTime == displayTime
+                  );
+                }).toList(),
+              )
+                  : Center(
+                child: Text(
+                  'Select a date to view available times',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[400],
+                    fontSize: 14,
+                  ),
+                ),
               ),
             ),
+
 
             SizedBox(height: 30),
 
@@ -330,8 +421,10 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
                         ),
                       ],
                     ),
+
                     Text(
-                      '\$${selectedSeat!.price.toStringAsFixed(2)}',
+                      '${selectedSeat!.price + double.parse(widget.event?['price'] ??'0' )} DZD',
+
                       style: GoogleFonts.poppins(
                         color: Colors.red,
                         fontSize: 18,
@@ -432,14 +525,14 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
       ],
     );
   }
-
   Widget _buildDateItem(String weekday, String day, {bool isSelected = false}) {
     return GestureDetector(
       onTap: () {
         setState(() {
           selectedDate = '$weekday-$day';
+          selectedTime = ''; // Reset time selection when date changes
         });
-        _loadSeats();
+        _loadSeats(selectedReplayId!);
       },
       child: Container(
         margin: EdgeInsets.only(right: 12),
@@ -473,14 +566,15 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
       ),
     );
   }
-
-  Widget _buildTimeItem(String time, {bool isSelected = false}) {
+String? selectedReplayId ;
+  Widget _buildTimeItem(String time, {bool isSelected = false, String? replayId}) {
     return GestureDetector(
       onTap: () {
         setState(() {
           selectedTime = time;
+          selectedReplayId = replayId.toString(); // Store the replay ID for later use
         });
-        _loadSeats();
+        _loadSeats(selectedReplayId!);
       },
       child: Container(
         margin: EdgeInsets.only(right: 12),
@@ -500,6 +594,7 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
       ),
     );
   }
+
 
   void _showCheckoutModal() {
     showModalBottomSheet(

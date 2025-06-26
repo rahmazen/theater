@@ -26,7 +26,39 @@ class _TheaterShowDetailPageState extends State<TheaterShowDetailPage> {
     super.initState();
     fetchEventDetails();
   }
+// Helper function to parse upcoming_replays string
+  List<Map<String, String>> parseUpcomingReplays(String upcomingReplays) {
+    List<Map<String, String>> replays = [];
 
+    if (upcomingReplays.isEmpty) return replays;
+
+    // Split by comma and parse each replay
+    List<String> replayParts = upcomingReplays.split(',');
+
+    for (String part in replayParts) {
+      part = part.trim();
+
+      // Extract date, time, and id using regex
+      RegExp regex = RegExp(r'(\d{2}/\d{2})\s+(\d{2}:\d{2})\s+\(id:(\d+)\)');
+      Match? match = regex.firstMatch(part);
+
+      if (match != null) {
+        replays.add({
+          'date': match.group(1)!,
+          'time': match.group(2)!,
+          'id': match.group(3)!,
+        });
+      }
+    }
+
+    return replays;
+  }
+
+// Helper function to format the replay datetime for display
+  String formatReplayDateTime(String date, String time) {
+    // You can customize this format as needed
+    return '$date at $time';
+  }
   Future<void> fetchEventDetails() async {
     try {
       // Replace with your actual API endpoint
@@ -38,6 +70,35 @@ class _TheaterShowDetailPageState extends State<TheaterShowDetailPage> {
       if (response.statusCode == 200) {
         setState(() {
           eventData = json.decode(response.body);
+          isLoading = false;
+        });
+        fetchreplays();
+      } else {
+        setState(() {
+          error = 'Failed to load event details';
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        error = 'Error: $e';
+        isLoading = false;
+      });
+    }
+  }
+String replays = '' ;
+
+  Future<void> fetchreplays() async {
+    try {
+
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/client/replays/${eventData?['content']['id']}'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          replays = json.decode(response.body).toString();
           isLoading = false;
         });
       } else {
@@ -53,6 +114,7 @@ class _TheaterShowDetailPageState extends State<TheaterShowDetailPage> {
       });
     }
   }
+
 
   String formatDateTime(String dateTimeString) {
     try {
@@ -318,11 +380,11 @@ class _TheaterShowDetailPageState extends State<TheaterShowDetailPage> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.grey[800]!),
                     ),
-                    child: Column(
+                    child:Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Show Times',
+                          'Upcoming Replays',
                           style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 16,
@@ -330,20 +392,32 @@ class _TheaterShowDetailPageState extends State<TheaterShowDetailPage> {
                           ),
                         ),
                         SizedBox(height: 8),
-                        Text(
-                          'Start: ${formatDateTime(startTime)}',
-                          style: GoogleFonts.poppins(
-                            color: Colors.grey[300],
-                            fontSize: 14,
+
+                        // Parse and display upcoming replays
+                        ...parseUpcomingReplays(replays).map((replay) =>
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                formatReplayDateTime(replay['date']!, replay['time']!),
+                                style: GoogleFonts.poppins(
+                                  color: Colors.grey[300],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            )
+                        ).toList(),
+
+                        // If no replays available
+                        if (parseUpcomingReplays(replays).isEmpty)
+                          Text(
+                            'No upcoming replays',
+                            style: GoogleFonts.poppins(
+                              color: Colors.grey[400],
+                              fontSize: 14,
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
-                        ),
-                        Text(
-                          'End: ${formatDateTime(endTime)}',
-                          style: GoogleFonts.poppins(
-                            color: Colors.grey[300],
-                            fontSize: 14,
-                          ),
-                        ),
+
                         if (eventData!['minimum_age'] != null && eventData!['minimum_age'] > 0)
                           Text(
                             'Minimum age: ${eventData!['minimum_age']} years',
@@ -539,7 +613,7 @@ class _TheaterShowDetailPageState extends State<TheaterShowDetailPage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => CinemaSeatSelectionPage(event: eventData),
+                builder: (context) => CinemaSeatSelectionPage(event: eventData , replays: replays),
               ),
             );
           });
