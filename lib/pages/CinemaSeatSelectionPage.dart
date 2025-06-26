@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+import 'package:theater/pages/payement/TicketPage.dart';
+
 class Seat {
   final int seatNumber;
   final int row;
@@ -93,20 +95,8 @@ print ('leading seats for event id : ${id}');
     List<Seat> sampleSeats = [
       // Row 1
       Seat(seatNumber: 1, row: 1, column: 1, type: "vip", price: 500.00, status: "available"),
-      Seat(seatNumber: 2, row: 1, column: 2, type: "regular", price: 200.00, status: "available"),
-      Seat(seatNumber: 3, row: 1, column: 3, type: "regular", price: 200.00, status: "reserved"),
-      Seat(seatNumber: 4, row: 1, column: 4, type: "vip", price: 500.00, status: "available"),
-      Seat(seatNumber: 5, row: 1, column: 5, type: "vip", price: 500.00, status: "available"),
-      Seat(seatNumber: 6, row: 1, column: 6, type: "vip", price: 500.00, status: "reserved"),
-      Seat(seatNumber: 7, row: 1, column: 7, type: "regular", price: 200.00, status: "available"),
-      Seat(seatNumber: 8, row: 1, column: 8, type: "regular", price: 200.00, status: "available"),
-
-
-      // Row 4
       Seat(seatNumber: 27, row: 4, column: 3, type: "regular", price: 200.00, status: "available"),
       Seat(seatNumber: 28, row: 4, column: 4, type: "regular", price: 200.00, status: "reserved"),
-      Seat(seatNumber: 29, row: 4, column: 5, type: "regular", price: 200.00, status: "available"),
-      Seat(seatNumber: 30, row: 4, column: 6, type: "regular", price: 200.00, status: "available"),
     ];
 
     setState(() {
@@ -454,7 +444,11 @@ print ('leading seats for event id : ${id}');
               margin: EdgeInsets.fromLTRB(20, 10, 20, 30),
               child: ElevatedButton(
                 onPressed: selectedSeat != null ? () {
-                  _showCheckoutModal();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TicketPage(),
+                    ), );
                 } : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
@@ -572,7 +566,7 @@ String? selectedReplayId ;
       onTap: () {
         setState(() {
           selectedTime = time;
-          selectedReplayId = replayId.toString(); // Store the replay ID for later use
+          selectedReplayId = replayId.toString();
         });
         _loadSeats(selectedReplayId!);
       },
@@ -596,83 +590,7 @@ String? selectedReplayId ;
   }
 
 
-  void _showCheckoutModal() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        margin: EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.grey[800],
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(30),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.check_circle_outline,
-                  color: Colors.white,
-                  size: 40,
-                ),
-              ),
-              SizedBox(height: 20),
-              Text(
-                'All done!',
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 12),
-              Text(
-                'You have successfully booked seat ${selectedSeat!.seatNumber} for \$${selectedSeat!.price.toStringAsFixed(2)}.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-              SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.grey[800],
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    'Ok, thanks!',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(height: 10),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+
 }
 
 class CurvedScreenPainter extends CustomPainter {

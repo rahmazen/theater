@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:google_fonts/google_fonts.dart';
 
-class TicketPage extends StatelessWidget {
+class TicketPage extends StatefulWidget {
+  @override
+  State<TicketPage> createState() => _TicketPageState();
+}
+
+class _TicketPageState extends State<TicketPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -374,7 +379,7 @@ class TicketPage extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  'Checkout',
+                  'Send by email',
                   style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 16,
