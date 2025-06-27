@@ -9,6 +9,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import '../pages/Account/authProvider.dart';
 
 import '../pointBalence.dart';
 
@@ -175,9 +177,11 @@ class _BasePageState extends State<BasePage> {
 class ChatApiService {
   static const String baseUrl = 'http://127.0.0.1:8000/aichat/messages/';
 
-  static Future<List<ChatMessage>> getMessages(int? sessionId) async {
+  // Pass BuildContext to access AuthProvider
+  static Future<List<ChatMessage>> getMessages(BuildContext context, int? sessionId) async {
     try {
-      // Build URL with query parameters if sessionId is provided
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final accessToken = authProvider.authData?.accessToken ?? '';
       String url = baseUrl;
       if (sessionId != null) {
         url += '?session_id=$sessionId';
@@ -187,21 +191,21 @@ class ChatApiService {
         Uri.parse(url),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUxMDEwNTExLCJpYXQiOjE3NTA5ODY1MTEsImp0aSI6Ijg2NmZiNzU2M2I0NzRhMDdhMDU3YWNmOTNiN2FhM2YwIiwidXNlcm5hbWUiOiJvayJ9.Bl2x7GeXJct3XZBuuz3yzK8iHPimC_tsn0t-egdGNtE'
+          'Authorization': 'Bearer $accessToken'
         },
       );
 
-      print('GET request URL: $url'); // Debug print
-      print('Response status: ${response.statusCode}'); // Debug print
-      print('Response body: ${response.body}'); // Debug print
+      print('GET request URL: $url');
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         List<dynamic> jsonData = json.decode(response.body);
         List<ChatMessage> messages = jsonData.map((item) => ChatMessage.fromJson(item)).toList();
-        print('Parsed ${messages.length} messages'); // Debug print
+        print('Parsed ${messages.length} messages');
         return messages;
       } else {
-        print('Error: HTTP ${response.statusCode}'); // Debug print
+        print('Error: HTTP ${response.statusCode}');
         throw Exception('Failed to load messages: ${response.statusCode}');
       }
     } catch (e) {
@@ -210,26 +214,28 @@ class ChatApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> sendMessage(String message, int? sessionId) async {
+  static Future<Map<String, dynamic>> sendMessage(BuildContext context, String message, int? sessionId) async {
     try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final accessToken = authProvider.authData?.accessToken ?? '';
       Map<String, dynamic> body = {'message': message};
       if (sessionId != null) {
         body['session_id'] = sessionId;
       }
 
-      print('Sending message: $body'); // Debug print
+      print('Sending message: $body');
 
       final response = await http.post(
         Uri.parse(baseUrl),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUxMDEwNTExLCJpYXQiOjE3NTA5ODY1MTEsImp0aSI6Ijg2NmZiNzU2M2I0NzRhMDdhMDU3YWNmOTNiN2FhM2YwIiwidXNlcm5hbWUiOiJvayJ9.Bl2x7GeXJct3XZBuuz3yzK8iHPimC_tsn0t-egdGNtE'
+          'Authorization': 'Bearer $accessToken'
         },
         body: json.encode(body),
       );
 
-      print('POST response status: ${response.statusCode}'); // Debug print
-      print('POST response body: ${response.body}'); // Debug print
+      print('POST response status: ${response.statusCode}');
+      print('POST response body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return json.decode(response.body);
@@ -295,7 +301,7 @@ class _ChatPopupState extends State<ChatPopup> {
 
     try {
       _sessionId = await SessionManager.getSessionId();
-      List<ChatMessage> messages = await ChatApiService.getMessages(_sessionId);
+      List<ChatMessage> messages = await ChatApiService.getMessages(context, _sessionId);
 
       setState(() {
         _messages = messages;
@@ -320,7 +326,7 @@ class _ChatPopupState extends State<ChatPopup> {
     });
 
     try {
-      Map<String, dynamic> response = await ChatApiService.sendMessage(messageText, _sessionId);
+      Map<String, dynamic> response = await ChatApiService.sendMessage(context, messageText, _sessionId);
 
       if (response.isNotEmpty) {
         // Save session ID if it's a new session
