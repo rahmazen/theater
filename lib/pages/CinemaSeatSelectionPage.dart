@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:theater/pages/pay.dart';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
@@ -40,7 +41,7 @@ class Seat {
     );
   }
 }
-
+ String orderId ='';
 class CinemaSeatSelectionPage extends StatefulWidget {
   final Map<String, dynamic>? event;
   final String? replays;
@@ -50,11 +51,9 @@ class CinemaSeatSelectionPage extends StatefulWidget {
     this.event,
     this.replays
   }) : super(key: key);
-
   @override
   _CinemaSeatSelectionPageState createState() => _CinemaSeatSelectionPageState();
 }
-
 class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
   List<Seat> seats = [];
   Seat? selectedSeat;
@@ -71,6 +70,55 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
   void initState() {
     super.initState();
     _loadSeats(widget.event!['id'].toString());
+
+    if (orderId!=null){
+         getTrans(orderId);
+    }
+  }
+  Future <void> getTrans ( String orderId ) async{
+
+    try {
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:8000/client/payment2/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'orderId': orderId,
+        }),
+      );
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        final status = data['data']['status'];
+        setState(() {
+          if (status == 'processing' || status == 'general_fail') {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  status == 'processing'
+                      ? 'Payment is still processing...'
+                      : 'Payment failed. Please try again.',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          } else if (status == 'paid') {
+            // Optional: show success message before navigating
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Payment successful! Redirecting to your ticket...'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            createTicket();
+
+          }
+        });
+
+      }else{
+
+      }
+    } catch (e) {
+    print('Error getting transaction: $e');
+    }
   }
 
   @override
@@ -246,13 +294,15 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
 
         final data = json.decode(response.body);
         final String url = data['data']['attributes']['form_url'];
-        if (await canLaunchUrl(Uri.parse(url))) {
-          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-        } else {
-          print('Could not launch $url');
-          throw 'Could not launch $url';
 
-        }
+        setState(() {
+          orderId = data['data']['id'];
+
+        });
+
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => PaymentVerificationPage(orderId: orderId , selectedSeat:  selectedSeat ,selectedReplay:  selectedReplayId , url :url )),
+        );
       } else {
         print('Payment failed with status: ${response.statusCode}');
       }
@@ -676,8 +726,8 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
                 ),
                 child: Text(
                   selectedSeat != null
-                      ? 'Get Tickets • 1 Seat'
-                      : 'Select Seats',
+                      ? 'Get Ticket • 1 Seat'
+                      : 'Select Seat',
                   style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 16,
