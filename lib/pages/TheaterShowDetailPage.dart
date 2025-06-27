@@ -1,11 +1,357 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'dart:convert';
+import 'Account/authProvider.dart';
+import 'CinemaSeatSelectionPage.dart';
+import 'package:intl/intl.dart';
+class TheaterShowDetailPage extends StatefulWidget {
+  final String eventid;
 
-class TheaterShowDetailPage extends StatelessWidget {
-  const TheaterShowDetailPage({Key? key}) : super(key: key);
+  const TheaterShowDetailPage({
+    Key? key,
+    required this.eventid,
+  }) : super(key: key);
+
+  @override
+  State<TheaterShowDetailPage> createState() => _TheaterShowDetailPageState();
+}
+
+class _TheaterShowDetailPageState extends State<TheaterShowDetailPage> {
+  Map<String, dynamic>? eventData;
+  bool isLoading = true;
+  String? error;
+  int? _selectedRating; // To store the selected rating
+  final List<bool> _ratingStars = List.generate(5, (index) => false);
+  @override
+  void initState() {
+    super.initState();
+    fetchEventDetails();
+    _commentsFuture = _fetchComments();
+  }
+// Helper function to parse upcoming_replays string
+  List<Map<String, String>> parseUpcomingReplays(String upcomingReplays) {
+    List<Map<String, String>> replays = [];
+
+    if (upcomingReplays.isEmpty) return replays;
+
+    // Split by comma and parse each replay
+    List<String> replayParts = upcomingReplays.split(',');
+
+    for (String part in replayParts) {
+      part = part.trim();
+
+      // Extract date, time, and id using regex
+      RegExp regex = RegExp(r'(\d{2}/\d{2})\s+(\d{2}:\d{2})\s+\(id:(\d+)\)');
+      Match? match = regex.firstMatch(part);
+
+      if (match != null) {
+        replays.add({
+          'date': match.group(1)!,
+          'time': match.group(2)!,
+          'id': match.group(3)!,
+        });
+      }
+    }
+
+    return replays;
+  }
+
+// Helper function to format the replay datetime for display
+  String formatReplayDateTime(String date, String time) {
+    // You can customize this format as needed
+    return '$date at $time';
+  }
+  Future<void> fetchEventDetails() async {
+    try {
+      // Replace with your actual API endpoint
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/client/event/${widget.eventid}'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          eventData = json.decode(response.body);
+          isLoading = false;
+        });
+        fetchreplays();
+      } else {
+        setState(() {
+          error = 'Failed to load event details';
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        error = 'Error: $e';
+        isLoading = false;
+      });
+    }
+  }
+String replays = '' ;
+  final TextEditingController _commentController = TextEditingController();
+
+
+// In your initState
+
+
+// Methods to add
+  Future<List<dynamic>> _fetchComments() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/client/comment/${widget.eventid}/'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as List;
+        return data ;
+      } else {
+        throw Exception('Failed to load comments');
+      }
+    } catch (e) {
+      throw Exception('Error fetching comments: $e');
+    }
+  }
+
+  Future<void> _submitComment(BuildContext context) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (_commentController.text.isEmpty) return;
+
+    try {
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:8000/client/comment/${authProvider.authData?.username}/${widget.eventid}/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${authProvider.authData?.accessToken}',
+        },
+        body: json.encode({
+          'comment': _commentController.text,
+          'rating': _selectedRating,
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        _commentController.clear();
+        setState(() {
+          _commentsFuture = _fetchComments(); // Refresh comments
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Comment submitted!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else {
+        throw Exception('Failed to submit comment');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error submitting comment: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }// Controllers and state
+
+  late Future<List<dynamic>> _commentsFuture;
+
+
+// Submit new comment
+
+// Modified review item widget
+  Widget _buildReviewItem(String name, String date, double rating, String comment, String? imageUrl) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[800]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Colors.grey[800],
+                    backgroundImage: imageUrl != null
+                        ? NetworkImage('http://127.0.0.1:8000$imageUrl')
+                        : null,
+                    child: imageUrl == null
+                        ? Text(
+                      name[0].toUpperCase(),
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        date,
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey[500],
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (rating > 0) Row(
+                children: [
+                  ...List.generate(5, (index) {
+                    return Icon(
+                      index < rating.floor() ? Icons.star :
+                      (index < rating && rating % 1 != 0) ? Icons.star_half : Icons.star_border,
+                      color: Colors.red,
+                      size: 16,
+                    );
+                  }),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            comment,
+            style: GoogleFonts.poppins(
+              color: Colors.grey[300],
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  Future<void> fetchreplays() async {
+    try {
+
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/client/replays/${eventData?['content']['id']}'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          replays = json.decode(response.body).toString();
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          error = 'Failed to load event details';
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        error = 'Error: $e';
+        isLoading = false;
+      });
+    }
+  }
+
+
+  String formatDateTime(String dateTimeString) {
+    try {
+      DateTime dateTime = DateTime.parse(dateTimeString);
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year} at ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return dateTimeString;
+    }
+  }
+
+  String formatDuration(int minutes) {
+    int hours = minutes ~/ 60;
+    int mins = minutes % 60;
+    if (hours > 0) {
+      return '${hours}h ${mins}min';
+    }
+    return '${mins}min';
+  }
+
+  String getImageUrl(String? imagePath) {
+    if (imagePath == null || imagePath.isEmpty) {
+      return 'https://picsum.photos/400/600?random=1';
+    }
+    // Replace with your actual base URL
+    return 'http://127.0.0.1:8000$imagePath';
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.red),
+        ),
+      );
+    }
+
+    if (error != null) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error, color: Colors.red, size: 64),
+              SizedBox(height: 16),
+              Text(
+                error!,
+                style: GoogleFonts.poppins(color: Colors.white, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    isLoading = true;
+                    error = null;
+                  });
+                  fetchEventDetails();
+                },
+                child: Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final content = eventData!['content'];
+    final artists = eventData!['artists'] as List<dynamic>;
+    final startTime = eventData!['start_time'];
+    final endTime = eventData!['end_time'];
+    final ticketPrice = eventData!['ticket_price'];
+    final isSoldOut = eventData!['is_sold_out'];
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: SingleChildScrollView(
@@ -24,7 +370,7 @@ class TheaterShowDetailPage extends StatelessWidget {
                       fit: StackFit.expand,
                       children: [
                         Image.network(
-                          'https://picsum.photos/400/600?random=1',
+                         'http://127.0.0.1:8000${content['poster']}',
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
                             return Container(
@@ -77,34 +423,35 @@ class TheaterShowDetailPage extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Play Button
-                Positioned(
-                  bottom: 1,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      width: 70,
-                      height: 70,
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.8),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.red.withOpacity(0.3),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.play_arrow_rounded,
-                        color: Colors.white,
-                        size: 35,
+                // Play Button (only show if trailer is available)
+                if (content['trailer_url'] != null)
+                  Positioned(
+                    bottom: 1,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        width: 70,
+                        height: 70,
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.8),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(0.3),
+                              blurRadius: 10,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 35,
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
 
@@ -118,7 +465,7 @@ class TheaterShowDetailPage extends StatelessWidget {
 
                   // Title
                   Text(
-                    'THE NUTCRACKER AND\nTHE FOUR REALMS',
+                    content['title'] ?? 'No Title',
                     style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontSize: 24,
@@ -129,9 +476,9 @@ class TheaterShowDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 12),
 
-                  // Genre
+                  // Event Type
                   Text(
-                    'Adventure, Family, Fantasy',
+                    eventData!['event_type']?.toString().toUpperCase() ?? 'PERFORMANCE',
                     style: GoogleFonts.poppins(
                       color: Colors.grey[400],
                       fontSize: 14,
@@ -140,117 +487,158 @@ class TheaterShowDetailPage extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
-                  // Rating (commented out as in original)
-                  // Row(
-                  //   children: [
-                  //     ...List.generate(4, (index) =>
-                  //         Icon(Icons.star, color: Colors.red, size: 20)
-                  //     ),
-                  //     Icon(Icons.star_border, color: Colors.grey, size: 20),
-                  //     const SizedBox(width: 8),
-                  //     Text(
-                  //       '4.0',
-                  //       style: GoogleFonts.poppins(
-                  //         color: Colors.white,
-                  //         fontSize: 16,
-                  //         fontWeight: FontWeight.w500,
-                  //       ),
-                  //     ),
-                  //   ],
-                  // ),
+                  // Rating (if available)
+                  if (content['rating'] != null)
+                    Row(
+                      children: [
+                        ...List.generate(5, (index) {
+                          double rating = content['rating'].toDouble();
+                          return Icon(
+                            index < rating.floor() ? Icons.star :
+                            (index < rating && rating % 1 != 0) ? Icons.star_half : Icons.star_border,
+                            color: Colors.red,
+                            size: 20,
+                          );
+                        }),
+                        const SizedBox(width: 8),
+                        Text(
+                          content['rating'].toString(),
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
 
                   const SizedBox(height: 20),
 
                   // Show Details
-                  Row(
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
                     children: [
-                      _buildDetailChip('2018'),
-                      const SizedBox(width: 12),
-                      _buildDetailChip('Comedy'),
-                      const SizedBox(width: 12),
-                      _buildDetailChip('1h 45min'),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Description
-                  Text(
-                    'All Clara wants is a key - a one-of-a-kind key that will unlock a box that holds a priceless gift from her late mother. A golden thread, presented to her at godfather Drosselmeyer\'s annual holiday party, leads her to the coveted key—which promptly disappears into a strange and mysterious parallel world.',
-                    style: GoogleFonts.poppins(
-                      color: Colors.grey[300],
-                      fontSize: 14,
-                      height: 1.5,
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  // Screenshots Section
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Screenshots',
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        color: Colors.grey[400],
-                        size: 20,
-                      ),
+                      if (content['release_year'] != null)
+                        _buildDetailChip(content['release_year'].toString()),
+                      if (content['duration_minutes'] != null)
+                        _buildDetailChip(formatDuration(content['duration_minutes'])),
+                      if (content['language'] != null)
+                        _buildDetailChip(content['language']),
+                      if (content['subtitles'] == true)
+                        _buildDetailChip('Subtitles'),
+                      _buildDetailChip('${ticketPrice} DA'),
                     ],
                   ),
 
                   const SizedBox(height: 16),
 
-                  // Screenshots Grid
-                  SizedBox(
-                    height: 100,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: 4,
-                      itemBuilder: (context, index) {
-                        return Container(
-                          width: 150,
-                          margin: const EdgeInsets.only(right: 12),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            color: Colors.grey[800],
+                  // Show Times
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[900],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[800]!),
+                    ),
+                    child:Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Upcoming Replays',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              'https://picsum.photos/150/100?random=${index + 2}',
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Colors.grey[800],
-                                  child: Icon(
-                                    Icons.image,
-                                    color: Colors.grey[600],
-                                    size: 40,
-                                  ),
-                                );
-                              },
+                        ),
+                        SizedBox(height: 8),
+
+                        // Parse and display upcoming replays
+                        ...parseUpcomingReplays(replays).map((replay) =>
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                formatReplayDateTime(replay['date']!, replay['time']!),
+                                style: GoogleFonts.poppins(
+                                  color: Colors.grey[300],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            )
+                        ).toList(),
+
+                        // If no replays available
+                        if (parseUpcomingReplays(replays).isEmpty)
+                          Text(
+                            'No upcoming replays',
+                            style: GoogleFonts.poppins(
+                              color: Colors.grey[400],
+                              fontSize: 14,
+                              fontStyle: FontStyle.italic,
                             ),
                           ),
-                        );
-                      },
+
+                        if (eventData!['minimum_age'] != null && eventData!['minimum_age'] > 0)
+                          Text(
+                            'Minimum age: ${eventData!['minimum_age']} years',
+                            style: GoogleFonts.poppins(
+                              color: Colors.orange,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
 
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 24),
+
+                  // Description
+                  if (content['description'] != null && content['description'].isNotEmpty)
+                    Text(
+                      content['description'],
+                      style: GoogleFonts.poppins(
+                        color: Colors.grey[300],
+                        fontSize: 14,
+                        height: 1.5,
+                      ),
+                    ),
+
+                  const SizedBox(height: 30),
+
+                  // Artists Section
+                  if (artists.isNotEmpty) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Artists',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Artists List
+                    ...artists.map((artist) => _buildArtistItem(artist)).toList(),
+
+                    const SizedBox(height: 40),
+                  ],
 
                   // Reviews Section
+
+                  // Comment Input Section
+
                   Row(
                     children: [
                       Text(
-                        'Reviews',
+                        'Comments',
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -258,134 +646,187 @@ class TheaterShowDetailPage extends StatelessWidget {
                         ),
                       ),
                       Spacer(),
-                    //  Text(
-                   //     'See all',
-                  //      style: GoogleFonts.poppins(
-                 //         fontSize: 14,
-                   //       color: Colors.grey[400],
-                   //       fontWeight: FontWeight.w600,
-                   //     ),
-                   //   ),
                     ],
                   ),
 
                   const SizedBox(height: 30),
 
-                  // Comment Input Section
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[900],
-                      borderRadius: BorderRadius.circular(25),
-                      border: Border.all(color: Colors.grey[700]!),
-                    ),
-                    child: Row(
-                      children: [
-                        // Profile picture placeholder
-                        Container(
-                          margin: const EdgeInsets.only(left: 12),
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          child: ClipOval(
-                            child: Icon(
-                              Icons.person,
-                              size: 18,
-                              color: Colors.white,
+// Comment Input Section (only visible when authenticated)
+                  Consumer<AuthProvider>(
+                    builder: (context, authProvider, child) {
+                      if (!authProvider.isAuthenticated) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return Column(
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey[900],
+                              borderRadius: BorderRadius.circular(25),
+                              border: Border.all(color: Colors.grey[700]!),
                             ),
-                          ),
-                        ),
-
-                        // Comment text field
-                        Expanded(
-                          child: TextField(
-                            cursorColor: Colors.grey[600],
-                            style: GoogleFonts.poppins(color: Colors.white),
-                            decoration: InputDecoration(
-                              hintText: 'Write your Review...',
-
-                              hintStyle: GoogleFonts.poppins(
-                                color: Colors.grey[400],
-                                fontSize: 14,
-                              ),
-
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                            ),
-                          ),
-                        ),
-
-                        // Action icons
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                Icons.emoji_emotions_outlined,
-                                color: Colors.grey[400],
-                                size: 20,
-                              ),
-                              onPressed: () {},
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              splashRadius: 20,
-                            ),
-                            const SizedBox(width: 8),
-
-
-                            Container(
-                              margin: const EdgeInsets.only(right: 12),
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              child: IconButton(
-                                icon: Icon(
-                                  Icons.arrow_upward,
-                                  color: Colors.white,
-                                  size: 14,
-                                ),
-                                onPressed: () {
-                                  // Handle submit comment
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Review submitted!'),
-                                      backgroundColor: Colors.red,
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    // User profile picture
+                                    Container(
+                                      margin: const EdgeInsets.only(left: 12),
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: ClipOval(
+                                        child: authProvider.authData?.image != null
+                                            ? Image.network(
+                                          authProvider.authData?.image ?? '',
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Icon(
+                                              Icons.person,
+                                              size: 18,
+                                              color: Colors.white,
+                                            );
+                                          },
+                                        )
+                                            : Icon(
+                                          Icons.person,
+                                          size: 18,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                                     ),
-                                  );
-                                },
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                splashRadius: 12,
-                              ),
+
+                                    // Comment text field
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _commentController,
+                                        cursorColor: Colors.grey[600],
+                                        style: GoogleFonts.poppins(color: Colors.white),
+                                        decoration: InputDecoration(
+                                          hintText: 'Share your thoughts...',
+                                          hintStyle: GoogleFonts.poppins(
+                                            color: Colors.grey[400],
+                                            fontSize: 14,
+                                          ),
+                                          border: InputBorder.none,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                                        ),
+                                      ),
+                                    ),
+                                    // Inside your comment input Container, add this below the text field:
+                                    const SizedBox(height: 12),
+
+                                    // Action icons
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.emoji_emotions_outlined,
+                                            color: Colors.grey[400],
+                                            size: 20,
+                                          ),
+                                          onPressed: () {},
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          splashRadius: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+
+                                        Container(
+                                          margin: const EdgeInsets.only(right: 12),
+                                          width: 24,
+                                          height: 24,
+                                          decoration: BoxDecoration(
+                                            color: Colors.red,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: IconButton(
+                                            icon: Icon(
+                                              Icons.arrow_upward,
+                                              color: Colors.white,
+                                              size: 14,
+                                            ),
+                                            onPressed: () => _submitComment(context),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            splashRadius: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  children: List.generate(5, (index) {
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedRating = index + 1;
+                                          // Update star states
+                                          for (int i = 0; i < _ratingStars.length; i++) {
+                                            _ratingStars[i] = i <= index;
+                                          }
+                                        });
+                                      },
+                                      child: Icon(
+                                        _ratingStars[index] ? Icons.star : Icons.star_border,
+                                        color: Colors.red,
+                                        size: 20,
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
+
+                          ),
+
+
+
+                          const SizedBox(height: 24),
+                        ],
+                      );
+                    },
                   ),
 
-                  const SizedBox(height: 24),
+// Comments List
+                  FutureBuilder<List<dynamic>>(
+                    future: _commentsFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                  // Existing reviews
-                  _buildReviewItem(
-                      'Rahma Zen',
-                      'March 2025',
-                      5.0,
-                      'This show was amazing! The performance was outstanding and the visual effects were breathtaking. Would definitely recommend to anyone.'
+                      if (snapshot.hasError) {
+                        return Text('Error loading comments: ${snapshot.error}');
+                      }
+
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return Text(
+                          'No comments yet',
+                          style: GoogleFonts.poppins(color: Colors.grey),
+                        );
+                      }
+
+                      return Column(
+                        children: snapshot.data!.map((comment) => _buildReviewItem(
+                          comment['user']['username'],
+                          DateFormat('MMMM yyyy').format(DateTime.parse(comment['created_at'])),
+                          comment['rating']?.toDouble() ?? 0.0,
+                          comment['comment'] ?? '',
+                          comment['user']['image'],
+                        )).toList(),
+                      );
+                    },
                   ),
 
-                  _buildReviewItem(
-                      'Sarah Johnson',
-                      'April 2025',
-                      4.5,
-                      'The location is amazing, with stunning stage design. Cast was very talented and engaging. Overall experience was memorable and comfortable.'
-                  ),
-
-                  const SizedBox(height: 80), // Extra space for floating button
+                  const SizedBox(height: 80),
+                  // Sample reviews (you might want to fetch these from API as well)
+                  // Extra space for floating button
                 ],
               ),
             ),
@@ -394,19 +835,25 @@ class TheaterShowDetailPage extends StatelessWidget {
       ),
       // Floating Action Button for booking tickets
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // Handle book tickets action
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Booking tickets...'),
-              backgroundColor: Colors.red,
-            ),
-          );
+        onPressed: isSoldOut
+            ? null
+            : () {
+          Future.delayed(Duration(milliseconds: 500), () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CinemaSeatSelectionPage(event: eventData , replays: replays),
+              ),
+            );
+          });
         },
-        backgroundColor: Colors.red,
-        icon: const Icon(Icons.local_activity, color: Colors.white),
+        backgroundColor: isSoldOut ? Colors.grey : Colors.red,
+        icon: Icon(
+          isSoldOut ? Icons.block : Icons.local_activity,
+          color: Colors.white,
+        ),
         label: Text(
-          'BOOK TICKETS',
+          isSoldOut ? 'SOLD OUT' : 'BOOK TICKETS',
           style: GoogleFonts.poppins(
             color: Colors.white,
             fontSize: 14,
@@ -417,8 +864,8 @@ class TheaterShowDetailPage extends StatelessWidget {
     );
   }
 
-  // Build review item widget
-  Widget _buildReviewItem(String name, String date, double rating, String comment) {
+  // Build artist item widget
+  Widget _buildArtistItem(Map<String, dynamic> artist) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -427,70 +874,53 @@ class TheaterShowDetailPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey[800]!),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.red,
-                    child: Text(
-                      name[0].toUpperCase(),
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              'http://127.0.0.1:8000${artist['image']}',
+              width: 80,
+              height: 80,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: 60,
+                  height: 60,
+                  color: Colors.grey[800],
+                  child: Icon(
+                    Icons.person,
+                    color: Colors.grey[600],
+                    size: 30,
                   ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        date,
-                        style: GoogleFonts.poppins(
-                          color: Colors.grey[500],
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  ...List.generate(5, (index) {
-                    return Icon(
-                      index < rating.floor() ? Icons.star :
-                      (index < rating && rating % 1 != 0) ? Icons.star_half : Icons.star_border,
-                      color: Colors.red,
-                      size: 16,
-                    );
-                  }),
-                ],
-              ),
-            ],
+                );
+              },
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            comment,
-            style: GoogleFonts.poppins(
-              color: Colors.grey[300],
-              fontSize: 13,
-              height: 1.4,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  artist['name'] ?? 'Unknown Artist',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  artist['artist_type']?.toString().toUpperCase() ?? 'ARTIST',
+                  style: GoogleFonts.poppins(
+                    color: Colors.red,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+
+              ],
             ),
           ),
         ],
@@ -498,37 +928,7 @@ class TheaterShowDetailPage extends StatelessWidget {
     );
   }
 
-
-
-  Widget _buildActionButton(IconData icon, String label) {
-    return Column(
-      children: [
-        Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: Colors.grey[800],
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            icon,
-            color: Colors.white,
-            size: 24,
-          ),
-        ),
-        if (label.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: GoogleFonts.poppins(
-              color: Colors.grey[400],
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ],
-    );
-  }
+  // Build review item widget
 
   Widget _buildDetailChip(String text) {
     return Container(
@@ -556,7 +956,6 @@ class CurvedBottomClipper extends CustomClipper<Path> {
     var path = Path();
     path.lineTo(0, size.height - 60);
 
-    // Single smooth curve with more bend
     var controlPoint = Offset(size.width / 2, size.height + 20);
     var endPoint = Offset(size.width, size.height - 60);
 
