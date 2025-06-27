@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
-
+import 'package:url_launcher/url_launcher.dart';
 import 'package:theater/pages/payement/TicketPage.dart';
+
+import 'Account/authProvider.dart';
 
 class Seat {
   final int seatNumber;
@@ -13,7 +16,7 @@ class Seat {
   final int column;
   final String type;
   final double price;
-  String status; // available, selected, reserved
+  String status;
 
   Seat({
     required this.seatNumber,
@@ -192,14 +195,15 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
     });
     print(selectedSeat?.seatNumber);
     print(selectedReplayId );
-
+    final authData = Provider.of<AuthProvider>(context, listen: false).authData;
     try {
       final response = await http.post(  // Changed to POST
       Uri.parse('http://127.0.0.1:8000/client/book/'),
           headers: {'Content-Type': 'application/json'},
     body: jsonEncode({  // JSON encode the body
     'seat_id': selectedSeat?.seatNumber,  // Assuming you want the seat ID
-    'event_id': selectedReplayId  // Make sure this is the correct ID
+    'event_id': selectedReplayId,
+      'user_id' : authData?.username // Make sure this is the correct ID
     }),
     );
 
@@ -223,6 +227,40 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
 
     }
   }
+
+
+
+
+  Future<void> processPayment() async {
+    double amount2 = calculatePrice() ;
+    try {
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:8000/client/payment/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'amount': amount2,
+        }),
+      );
+
+      if (response.statusCode == 201) {
+
+        final data = json.decode(response.body);
+        final String url = data['data']['attributes']['form_url'];
+        if (await canLaunchUrl(Uri.parse(url))) {
+          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        } else {
+          print('Could not launch $url');
+          throw 'Could not launch $url';
+
+        }
+      } else {
+        print('Payment failed with status: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error during payment: $e');
+    }
+  }
+
 
 
   void _loadSampleData() {
@@ -356,7 +394,8 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
 
     return grid;
   }
-
+  double discountAmount = 0;
+  double get discountedPrice => calculatePrice() - discountAmount;
   Color _getSeatColor(Seat seat) {
     switch (seat.status) {
       case 'selected':
@@ -606,7 +645,7 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
 
             // Legend
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+              padding: EdgeInsets.symmetric(horizontal: 40, vertical: 10),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -623,7 +662,7 @@ class _CinemaSeatSelectionPageState extends State<CinemaSeatSelectionPage> {
               margin: EdgeInsets.fromLTRB(20, 10, 20, 30),
               child: ElevatedButton(
                 onPressed: selectedSeat != null ? () {
-                  createTicket();
+                  processPayment();
 
                 } : null,
                 style: ElevatedButton.styleFrom(

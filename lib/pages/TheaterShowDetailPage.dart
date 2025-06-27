@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import 'dart:convert';
+import 'Account/authProvider.dart';
 import 'CinemaSeatSelectionPage.dart';
-
+import 'package:intl/intl.dart';
 class TheaterShowDetailPage extends StatefulWidget {
   final String eventid;
 
@@ -20,11 +22,13 @@ class _TheaterShowDetailPageState extends State<TheaterShowDetailPage> {
   Map<String, dynamic>? eventData;
   bool isLoading = true;
   String? error;
-
+  int? _selectedRating; // To store the selected rating
+  final List<bool> _ratingStars = List.generate(5, (index) => false);
   @override
   void initState() {
     super.initState();
     fetchEventDetails();
+    _commentsFuture = _fetchComments();
   }
 // Helper function to parse upcoming_replays string
   List<Map<String, String>> parseUpcomingReplays(String upcomingReplays) {
@@ -87,7 +91,164 @@ class _TheaterShowDetailPageState extends State<TheaterShowDetailPage> {
     }
   }
 String replays = '' ;
+  final TextEditingController _commentController = TextEditingController();
 
+
+// In your initState
+
+
+// Methods to add
+  Future<List<dynamic>> _fetchComments() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/client/comment/${widget.eventid}/'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as List;
+        return data ;
+      } else {
+        throw Exception('Failed to load comments');
+      }
+    } catch (e) {
+      throw Exception('Error fetching comments: $e');
+    }
+  }
+
+  Future<void> _submitComment(BuildContext context) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (_commentController.text.isEmpty) return;
+
+    try {
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:8000/client/comment/${authProvider.authData?.username}/${widget.eventid}/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${authProvider.authData?.accessToken}',
+        },
+        body: json.encode({
+          'comment': _commentController.text,
+          'rating': _selectedRating,
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        _commentController.clear();
+        setState(() {
+          _commentsFuture = _fetchComments(); // Refresh comments
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Comment submitted!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else {
+        throw Exception('Failed to submit comment');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error submitting comment: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }// Controllers and state
+
+  late Future<List<dynamic>> _commentsFuture;
+
+
+// Submit new comment
+
+// Modified review item widget
+  Widget _buildReviewItem(String name, String date, double rating, String comment, String? imageUrl) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[900],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[800]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Colors.grey[800],
+                    backgroundImage: imageUrl != null
+                        ? NetworkImage('http://127.0.0.1:8000$imageUrl')
+                        : null,
+                    child: imageUrl == null
+                        ? Text(
+                      name[0].toUpperCase(),
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        date,
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey[500],
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (rating > 0) Row(
+                children: [
+                  ...List.generate(5, (index) {
+                    return Icon(
+                      index < rating.floor() ? Icons.star :
+                      (index < rating && rating % 1 != 0) ? Icons.star_half : Icons.star_border,
+                      color: Colors.red,
+                      size: 16,
+                    );
+                  }),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            comment,
+            style: GoogleFonts.poppins(
+              color: Colors.grey[300],
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   Future<void> fetchreplays() async {
     try {
 
@@ -471,10 +632,13 @@ String replays = '' ;
                   ],
 
                   // Reviews Section
+
+                  // Comment Input Section
+
                   Row(
                     children: [
                       Text(
-                        'Reviews',
+                        'Comments',
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -487,117 +651,182 @@ String replays = '' ;
 
                   const SizedBox(height: 30),
 
-                  // Comment Input Section
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[900],
-                      borderRadius: BorderRadius.circular(25),
-                      border: Border.all(color: Colors.grey[700]!),
-                    ),
-                    child: Row(
-                      children: [
-                        // Profile picture placeholder
-                        Container(
-                          margin: const EdgeInsets.only(left: 12),
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          child: ClipOval(
-                            child: Icon(
-                              Icons.person,
-                              size: 18,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
+// Comment Input Section (only visible when authenticated)
+                  Consumer<AuthProvider>(
+                    builder: (context, authProvider, child) {
+                      if (!authProvider.isAuthenticated) {
+                        return const SizedBox.shrink();
+                      }
 
-                        // Comment text field
-                        Expanded(
-                          child: TextField(
-                            cursorColor: Colors.grey[600],
-                            style: GoogleFonts.poppins(color: Colors.white),
-                            decoration: InputDecoration(
-                              hintText: 'Write your Review...',
-                              hintStyle: GoogleFonts.poppins(
-                                color: Colors.grey[400],
-                                fontSize: 14,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                      return Column(
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey[900],
+                              borderRadius: BorderRadius.circular(25),
+                              border: Border.all(color: Colors.grey[700]!),
                             ),
-                          ),
-                        ),
-
-                        // Action icons
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                Icons.emoji_emotions_outlined,
-                                color: Colors.grey[400],
-                                size: 20,
-                              ),
-                              onPressed: () {},
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              splashRadius: 20,
-                            ),
-                            const SizedBox(width: 8),
-
-                            Container(
-                              margin: const EdgeInsets.only(right: 12),
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              child: IconButton(
-                                icon: Icon(
-                                  Icons.arrow_upward,
-                                  color: Colors.white,
-                                  size: 14,
-                                ),
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Review submitted!'),
-                                      backgroundColor: Colors.red,
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    // User profile picture
+                                    Container(
+                                      margin: const EdgeInsets.only(left: 12),
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: ClipOval(
+                                        child: authProvider.authData?.image != null
+                                            ? Image.network(
+                                          authProvider.authData?.image ?? '',
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Icon(
+                                              Icons.person,
+                                              size: 18,
+                                              color: Colors.white,
+                                            );
+                                          },
+                                        )
+                                            : Icon(
+                                          Icons.person,
+                                          size: 18,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                                     ),
-                                  );
-                                },
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                splashRadius: 12,
-                              ),
+
+                                    // Comment text field
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _commentController,
+                                        cursorColor: Colors.grey[600],
+                                        style: GoogleFonts.poppins(color: Colors.white),
+                                        decoration: InputDecoration(
+                                          hintText: 'Share your thoughts...',
+                                          hintStyle: GoogleFonts.poppins(
+                                            color: Colors.grey[400],
+                                            fontSize: 14,
+                                          ),
+                                          border: InputBorder.none,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                                        ),
+                                      ),
+                                    ),
+                                    // Inside your comment input Container, add this below the text field:
+                                    const SizedBox(height: 12),
+
+                                    // Action icons
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.emoji_emotions_outlined,
+                                            color: Colors.grey[400],
+                                            size: 20,
+                                          ),
+                                          onPressed: () {},
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(),
+                                          splashRadius: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+
+                                        Container(
+                                          margin: const EdgeInsets.only(right: 12),
+                                          width: 24,
+                                          height: 24,
+                                          decoration: BoxDecoration(
+                                            color: Colors.red,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: IconButton(
+                                            icon: Icon(
+                                              Icons.arrow_upward,
+                                              color: Colors.white,
+                                              size: 14,
+                                            ),
+                                            onPressed: () => _submitComment(context),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            splashRadius: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  children: List.generate(5, (index) {
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          _selectedRating = index + 1;
+                                          // Update star states
+                                          for (int i = 0; i < _ratingStars.length; i++) {
+                                            _ratingStars[i] = i <= index;
+                                          }
+                                        });
+                                      },
+                                      child: Icon(
+                                        _ratingStars[index] ? Icons.star : Icons.star_border,
+                                        color: Colors.red,
+                                        size: 20,
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
+
+                          ),
+
+
+
+                          const SizedBox(height: 24),
+                        ],
+                      );
+                    },
                   ),
 
-                  const SizedBox(height: 24),
+// Comments List
+                  FutureBuilder<List<dynamic>>(
+                    future: _commentsFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
+                      if (snapshot.hasError) {
+                        return Text('Error loading comments: ${snapshot.error}');
+                      }
+
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return Text(
+                          'No comments yet',
+                          style: GoogleFonts.poppins(color: Colors.grey),
+                        );
+                      }
+
+                      return Column(
+                        children: snapshot.data!.map((comment) => _buildReviewItem(
+                          comment['user']['username'],
+                          DateFormat('MMMM yyyy').format(DateTime.parse(comment['created_at'])),
+                          comment['rating']?.toDouble() ?? 0.0,
+                          comment['comment'] ?? '',
+                          comment['user']['image'],
+                        )).toList(),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 80),
                   // Sample reviews (you might want to fetch these from API as well)
-                  _buildReviewItem(
-                      'Ahmed Kaci',
-                      'March 2025',
-                      5.0,
-                      'Absolutely stunning performance! The choreography was mesmerizing and the artistic expression was deeply moving.'
-                  ),
-
-                  _buildReviewItem(
-                      'Amira Bensalem',
-                      'April 2025',
-                      4.5,
-                      'Beautiful blend of traditional and contemporary dance. Nacera Belaza\'s work is truly inspiring and the venue was perfect.'
-                  ),
-
-                  const SizedBox(height: 80), // Extra space for floating button
+                  // Extra space for floating button
                 ],
               ),
             ),
@@ -700,85 +929,6 @@ String replays = '' ;
   }
 
   // Build review item widget
-  Widget _buildReviewItem(String name, String date, double rating, String comment) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[900],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[800]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.red,
-                    child: Text(
-                      name[0].toUpperCase(),
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        date,
-                        style: GoogleFonts.poppins(
-                          color: Colors.grey[500],
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  ...List.generate(5, (index) {
-                    return Icon(
-                      index < rating.floor() ? Icons.star :
-                      (index < rating && rating % 1 != 0) ? Icons.star_half : Icons.star_border,
-                      color: Colors.red,
-                      size: 16,
-                    );
-                  }),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            comment,
-            style: GoogleFonts.poppins(
-              color: Colors.grey[300],
-              fontSize: 13,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildDetailChip(String text) {
     return Container(

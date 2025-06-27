@@ -1,38 +1,295 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
 import 'package:theater/pages/payement/TicketPage.dart';
+import 'dart:convert';
 
-class TicketHistoryPage extends StatelessWidget {
+import 'Account/authProvider.dart';
+
+class TicketHistoryPage extends StatefulWidget {
   const TicketHistoryPage({Key? key}) : super(key: key);
 
   @override
+  State<TicketHistoryPage> createState() => _TicketHistoryPageState();
+}
+
+class _TicketHistoryPageState extends State<TicketHistoryPage> {
+  List<dynamic> ticketHistory = [];
+  bool isLoading = true;
+  String errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAuthAndLoadTickets();
+    });
+  }
+
+  void _checkAuthAndLoadTickets() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    if (!authProvider.isAuthenticated || authProvider.authData == null) {
+      // Redirect to sign-in if not authenticated
+      Navigator.of(context).pushReplacementNamed('/signin');
+      return;
+    }
+
+    // Load tickets if authenticated
+    _loadTicketHistory();
+  }
+
+  Future<void> _loadTicketHistory() async {
+    try {
+      setState(() {
+        isLoading = true;
+        errorMessage = '';
+      });
+
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final tickets = await _fetchTicketHistory(authProvider.authData!.accessToken , authProvider.authData!.username);
+
+      setState(() {
+        ticketHistory = tickets ?? [];
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Failed to load ticket history: ${e.toString()}';
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<List<dynamic>?> _fetchTicketHistory(String accessToken , username) async {
+    try {
+      // Replace with your actual API endpoint
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/client/tickets/${username}/'),
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data;
+      }
+    } catch (e) {
+      // For development/testing - return mock data if API fails
+      print('API Error: $e');
+      return _getMockTicketData();
+    }
+    return null;
+  }
+
+  // Mock data for testing - remove this when your API is ready
+  List<Map<String, dynamic>> _getMockTicketData() {
+    return [
+      {
+        "id": 24,
+        "event": {
+          "id": 3,
+          "content": {
+            "id": 2,
+            "title": "BALLET",
+            "description": "European ballet is a classical dance form known for its grace, precision, and storytelling.",
+            "type": "other",
+            "duration_minutes": 120,
+            "release_year": null,
+            "poster": "/media/catalogue/posters/ballet2.jpg",
+            "trailer_url": null,
+            "rating": null,
+            "language": null,
+            "subtitles": false
+          },
+          "artists": [
+            {
+              "id": 1,
+              "image": "/media/artists/photos/nacera.PNG",
+              "name": "Nacera Belaza",
+              "bio": "Founded by Algerian-born choreographer Nacera Belaza, this troupe is based in France and performs internationally — blending minimalism, contemporary movement, and spiritual depth.",
+              "artist_type": "dancer"
+            }
+          ],
+          "start_time": "2025-06-26T22:00:00Z",
+          "event_type": "play",
+          "end_time": "2025-06-26T23:40:00Z",
+          "ticket_price": "1000.00",
+          "minimum_age": 0,
+          "is_sold_out": false
+        },
+        "price_paid": "1000.00",
+        "purchased_at": "2025-06-26T16:22:14.302987Z",
+        "ticket_code": "45f30e7c-7e17-4a6f-8de2-0e7490f7b7c1",
+        "is_scanned": false,
+        "scanned_at": null,
+        "user": "dib_g",
+        "seat": 2
+      }
+    ];
+  }
+
+  String _formatDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  String _formatTime(String timeStr) {
+    try {
+      final date = DateTime.parse(timeStr);
+      final time = TimeOfDay.fromDateTime(date);
+      final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+      final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+      return '$hour:${time.minute.toString().padLeft(2, '0')} $period';
+    } catch (e) {
+      return timeStr;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title:  Text('Your tickets',
-        style: GoogleFonts.poppins(
-          fontWeight: FontWeight.w500
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        // Redirect if not authenticated
+        if (!authProvider.isAuthenticated || authProvider.authData == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.of(context).pushReplacementNamed('/signin');
+          });
+          return const Scaffold(
+            backgroundColor: Colors.black,
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(
+              'Your tickets',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+            ),
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _loadTicketHistory,
+              ),
+            ],
+          ),
+          backgroundColor: Colors.black,
+          body: _buildBody(),
+        );
+      },
+    );
+  }
+
+  Widget _buildBody() {
+    if (isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: Colors.white,
         ),
+      );
+    }
+
+    if (errorMessage.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              color: Colors.red,
+              size: 64,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              errorMessage,
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadTicketHistory,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(
+                'Retry',
+                style: GoogleFonts.poppins(),
+              ),
+            ),
+          ],
         ),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
+      );
+    }
+
+    if (ticketHistory.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.confirmation_num_outlined,
+              color: Colors.grey,
+              size: 64,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No tickets found',
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your ticket history will appear here',
+              style: GoogleFonts.poppins(
+                color: Colors.grey,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadTicketHistory,
+      color: Colors.red,
       backgroundColor: Colors.black,
-      body: ListView.builder(
-        padding:  EdgeInsets.only(left: 16, right:16 , top:16 , bottom: 80),
+      child: ListView.builder(
+        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 80),
         itemCount: ticketHistory.length,
         itemBuilder: (context, index) {
           final ticket = ticketHistory[index];
           return Padding(
-            padding: EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.only(bottom: 16),
             child: GestureDetector(
               onTap: () {
-
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => TicketPage(ticketData: ticket),
+                  ),
+                );
               },
               child: TicketCard(ticket: ticket),
-            )
-
+            ),
           );
         },
       ),
@@ -41,24 +298,81 @@ class TicketHistoryPage extends StatelessWidget {
 }
 
 class TicketCard extends StatelessWidget {
-  final Ticket ticket;
+  final Map<String, dynamic> ticket;
 
   const TicketCard({Key? key, required this.ticket}) : super(key: key);
 
+  String _formatDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  String _formatTime(String timeStr) {
+    try {
+      final date = DateTime.parse(timeStr);
+      final time = TimeOfDay.fromDateTime(date);
+      final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+      final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+      return '$hour:${time.minute.toString().padLeft(2, '0')} $period';
+    } catch (e) {
+      return timeStr;
+    }
+  }
+
+  String _getEventTypeDisplay(String eventType) {
+    switch (eventType) {
+      case 'play':
+        return 'Theater';
+      case 'movie':
+        return 'Cinema';
+      case 'concert':
+        return 'Concert';
+      default:
+        return 'Event';
+    }
+  }
+
+  bool _isExpired(String? endTimeStr) {
+    if (endTimeStr == null) return false;
+    try {
+      final endTime = DateTime.parse(endTimeStr);
+      return DateTime.now().isAfter(endTime);
+    } catch (e) {
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isExpired = ticket.isExpired;
+    // Extract data from new structure
+    final event = ticket['event'] ?? {};
+    final content = event['content'] ?? {};
+    final isScanned = ticket['is_scanned'] ?? false;
+    final isExpired = _isExpired(event['end_time']);
+
+    final showTitle = content['title'] ?? 'Unknown Show';
+    final showDate = _formatDate(event['start_time'] ?? '');
+    final showTime = _formatTime(event['start_time'] ?? '');
+    final orderId = ticket['ticket_code'] ?? '';
+    final imageUrl = content['poster'] ?? '';
+    final eventType = _getEventTypeDisplay(event['event_type'] ?? '');
+    final seatNumbers = ticket['seat'] != null ? 'Seat ${ticket['seat']}' : '';
 
     return Container(
-      height: 100,
+      height: 120,
       child: Stack(
         children: [
           // Main ticket container
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
-              image: DecorationImage(
-                image: NetworkImage(ticket.imageUrl),
+              image: imageUrl.isNotEmpty
+                  ? DecorationImage(
+                image: NetworkImage(imageUrl),
                 fit: BoxFit.cover,
                 colorFilter: ColorFilter.mode(
                   isExpired
@@ -66,12 +380,14 @@ class TicketCard extends StatelessWidget {
                       : Colors.black.withOpacity(0.4),
                   BlendMode.darken,
                 ),
-              ),
+              )
+                  : null,
+              color: imageUrl.isEmpty ? Colors.grey[800] : null,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
-                // Left section with movie details
+                // Left section with event details
                 Expanded(
                   flex: 3,
                   child: Container(
@@ -81,7 +397,7 @@ class TicketCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          ticket.showTitle,
+                          showTitle,
                           style: GoogleFonts.poppins(
                             color: isExpired ? Colors.grey[400] : Colors.white,
                             fontSize: 18,
@@ -89,6 +405,15 @@ class TicketCard extends StatelessWidget {
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          eventType,
+                          style: GoogleFonts.poppins(
+                            color: isExpired ? Colors.grey[500] : Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Row(
@@ -105,7 +430,7 @@ class TicketCard extends StatelessWidget {
                                     ),
                                   ),
                                   Text(
-                                    ticket.showDate,
+                                    showDate,
                                     style: GoogleFonts.poppins(
                                       color: isExpired ? Colors.grey[400] : Colors.white,
                                       fontSize: 12,
@@ -127,7 +452,7 @@ class TicketCard extends StatelessWidget {
                                     ),
                                   ),
                                   Text(
-                                    ticket.showTime,
+                                    showTime,
                                     style: GoogleFonts.poppins(
                                       color: isExpired ? Colors.grey[400] : Colors.white,
                                       fontSize: 12,
@@ -137,6 +462,29 @@ class TicketCard extends StatelessWidget {
                                 ],
                               ),
                             ),
+                            if (seatNumbers.isNotEmpty)
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Seat',
+                                      style: GoogleFonts.poppins(
+                                        color: isExpired ? Colors.grey[500] : Colors.white70,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                    Text(
+                                      seatNumbers,
+                                      style: GoogleFonts.poppins(
+                                        color: isExpired ? Colors.grey[400] : Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                       ],
@@ -147,7 +495,7 @@ class TicketCard extends StatelessWidget {
                 // Perforated divider
                 Container(
                   width: 1,
-                  height: 60,
+                  height: 80,
                   child: CustomPaint(
                     painter: VerticalDashedLinePainter(
                       color: isExpired ? Colors.grey[600]! : Colors.white70,
@@ -169,14 +517,14 @@ class TicketCard extends StatelessWidget {
                             child: CustomPaint(
                               painter: QRCodePainter(
                                 color: isExpired ? Colors.grey[600]! : Colors.white,
-                                data: ticket.orderId,
+                                data: orderId,
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          ticket.orderId,
+                          orderId.length >= 8 ? orderId.substring(0, 8).toUpperCase() : orderId.toUpperCase(),
                           style: GoogleFonts.poppins(
                             color: isExpired ? Colors.grey[500] : Colors.white70,
                             fontSize: 8,
@@ -191,27 +539,48 @@ class TicketCard extends StatelessWidget {
             ),
           ),
 
-          // Expired badge
-          if (isExpired)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child:  Text(
-                  'EXPIRED',
-                  style: GoogleFonts.poppins(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+          // Status badges
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (isScanned)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'USED',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                if (isExpired && !isScanned)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'EXPIRED',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
             ),
+          ),
 
           // Semi-circular cuts on top and bottom
           Positioned(
@@ -348,67 +717,3 @@ class QRCodePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
-class Ticket {
-  final String showTitle;
-  final String showDate;
-  final String showTime;
-  final String orderId;
-  final String imageUrl;
-  final bool isExpired;
-
-  Ticket({
-    required this.showTitle,
-    required this.showDate,
-    required this.showTime,
-    required this.orderId,
-    required this.imageUrl,
-    required this.isExpired,
-  });
-}
-
-// Sample data
-final List<Ticket> ticketHistory = [
-  Ticket(
-    showTitle: 'AVATAR: THE WAY OF WATER',
-    showDate: '06.20',
-    showTime: '7:30 PM',
-    orderId: 'K4F5H6M',
-    imageUrl: 'https://images.unsplash.com/photo-1635805737707-575885ab0820?w=800&h=400&fit=crop',
-    isExpired: false,
-  ),
-  Ticket(
-    showTitle: 'TOP GUN: MAVERICK',
-    showDate: '06.18',
-    showTime: '9:15 PM',
-    orderId: 'M7K3L9P',
-    imageUrl: 'https://images.unsplash.com/photo-1489599904335-af5b66e05f5c?w=800&h=400&fit=crop',
-    isExpired: false,
-  ),
-  Ticket(
-    showTitle: 'SPIDER-MAN: NO WAY HOME',
-    showDate: '06.15',
-    showTime: '6:00 PM',
-    orderId: 'P2N8Q5R',
-    imageUrl: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?w=800&h=400&fit=crop',
-    isExpired: true,
-  ),
-
-
-  Ticket(
-    showTitle: 'THE BATMAN',
-    showDate: '06.12',
-    showTime: '8:45 PM',
-    orderId: 'X9Y4Z1W',
-    imageUrl: 'https://images.unsplash.com/photo-1478720568477-b834d1819944?w=800&h=400&fit=crop',
-    isExpired: true,
-  ),
-  Ticket(
-    showTitle: 'DUNE: PART TWO',
-    showDate: '06.10',
-    showTime: '7:00 PM',
-    orderId: 'A5B8C2D',
-    imageUrl: 'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=800&h=400&fit=crop',
-    isExpired: true,
-  ),
-];

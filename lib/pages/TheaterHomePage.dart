@@ -290,18 +290,7 @@ List<dynamic> audienceFavorites =[  {
           CustomScrollView(
             controller: _scrollController,
             slivers: [
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
 
-
-              // Hero Content Section
               SliverToBoxAdapter(
                 child: Container(
                   height: 400,
@@ -310,7 +299,6 @@ List<dynamic> audienceFavorites =[  {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // New Show Badge
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
@@ -319,7 +307,7 @@ List<dynamic> audienceFavorites =[  {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child:  Text(
-                          'NEW SHOW',
+                          'today\'s schedule',
                           style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 12,
@@ -338,7 +326,7 @@ List<dynamic> audienceFavorites =[  {
                           key: ValueKey(todaysEvents[_currentIndex]['content']['title']),
                           style:  GoogleFonts.poppins(
                             color: Colors.white,
-                            fontSize: 48,
+                            fontSize: 38,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 2,
                           ),
@@ -502,7 +490,7 @@ List<dynamic> audienceFavorites =[  {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      todaysEvents[_currentIndex]['content']['type'],
+                                      todaysEvents[_currentIndex]['content']['type'] ?? '',
                                       style: GoogleFonts.poppins(
                                         color: Colors.white.withOpacity(0.8),
                                         fontSize: 12,

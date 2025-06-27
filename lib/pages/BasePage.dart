@@ -7,6 +7,8 @@ import '../crystal_navigation_bar/crystal_navigation_bar.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../pointBalence.dart';
+
 class BasePage extends StatefulWidget {
   const BasePage({super.key});
 
@@ -154,6 +156,11 @@ class _BasePageState extends State<BasePage> {
                 ),
               ],
             ),
+          ),
+          Positioned(
+            top: 15,
+            right: 16,
+            child: const PointsBalance(),
           ),
         ],
       ),
