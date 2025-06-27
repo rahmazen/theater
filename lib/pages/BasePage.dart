@@ -6,6 +6,9 @@ import 'package:theater/pages/profile_page.dart';
 import '../crystal_navigation_bar/crystal_navigation_bar.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BasePage extends StatefulWidget {
   const BasePage({super.key});
@@ -150,7 +153,7 @@ class _BasePageState extends State<BasePage> {
                   color: Colors.black.withOpacity(0.1),
                   spreadRadius: 2,
                   blurRadius: 10,
-                  offset:  Offset(0, 5),
+                  offset: Offset(0, 5),
                 ),
               ],
             ),
@@ -158,6 +161,98 @@ class _BasePageState extends State<BasePage> {
         ],
       ),
     );
+  }
+}
+
+// API Service Class
+class ChatApiService {
+  static const String baseUrl = 'http://127.0.0.1:8000/aichat/messages/';
+
+  static Future<List<ChatMessage>> getMessages(int? sessionId) async {
+    try {
+      // Build URL with query parameters if sessionId is provided
+      String url = baseUrl;
+      if (sessionId != null) {
+        url += '?session_id=$sessionId';
+      }
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUxMDEwNTExLCJpYXQiOjE3NTA5ODY1MTEsImp0aSI6Ijg2NmZiNzU2M2I0NzRhMDdhMDU3YWNmOTNiN2FhM2YwIiwidXNlcm5hbWUiOiJvayJ9.Bl2x7GeXJct3XZBuuz3yzK8iHPimC_tsn0t-egdGNtE'
+        },
+      );
+
+      print('GET request URL: $url'); // Debug print
+      print('Response status: ${response.statusCode}'); // Debug print
+      print('Response body: ${response.body}'); // Debug print
+
+      if (response.statusCode == 200) {
+        List<dynamic> jsonData = json.decode(response.body);
+        List<ChatMessage> messages = jsonData.map((item) => ChatMessage.fromJson(item)).toList();
+        print('Parsed ${messages.length} messages'); // Debug print
+        return messages;
+      } else {
+        print('Error: HTTP ${response.statusCode}'); // Debug print
+        throw Exception('Failed to load messages: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching messages: $e');
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>> sendMessage(String message, int? sessionId) async {
+    try {
+      Map<String, dynamic> body = {'message': message};
+      if (sessionId != null) {
+        body['session_id'] = sessionId;
+      }
+
+      print('Sending message: $body'); // Debug print
+
+      final response = await http.post(
+        Uri.parse(baseUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzUxMDEwNTExLCJpYXQiOjE3NTA5ODY1MTEsImp0aSI6Ijg2NmZiNzU2M2I0NzRhMDdhMDU3YWNmOTNiN2FhM2YwIiwidXNlcm5hbWUiOiJvayJ9.Bl2x7GeXJct3XZBuuz3yzK8iHPimC_tsn0t-egdGNtE'
+        },
+        body: json.encode(body),
+      );
+
+      print('POST response status: ${response.statusCode}'); // Debug print
+      print('POST response body: ${response.body}'); // Debug print
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to send message: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error sending message: $e');
+      return {};
+    }
+  }
+}
+
+// Session Manager
+class SessionManager {
+  static const String _sessionKey = 'chat_session_id';
+
+  static Future<int?> getSessionId() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_sessionKey);
+  }
+
+  static Future<void> saveSessionId(int sessionId) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_sessionKey, sessionId);
+  }
+
+  static Future<void> clearSessionId() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_sessionKey);
   }
 }
 
@@ -173,27 +268,79 @@ class ChatPopup extends StatefulWidget {
 
 class _ChatPopupState extends State<ChatPopup> {
   final TextEditingController _messageController = TextEditingController();
-  final List<ChatMessage> _messages = [
-    ChatMessage(
-      text: "I need recs",
-      isSent: true,
-    ),
-    ChatMessage(
-      text: "Hello, of course. Here is a list of what you might like",
-      isSent: false,
-    ),
-  ];
+  List<ChatMessage> _messages = [];
+  int? _sessionId;
+  bool _isLoading = false;
+  bool _isSending = false;
 
-  void _sendMessage() {
-    if (_messageController.text.trim().isNotEmpty) {
+  @override
+  void initState() {
+    super.initState();
+    _loadChatHistory(showLoading: true);
+  }
+
+  Future<void> _loadChatHistory({bool showLoading = true}) async {
+    if (showLoading) {
       setState(() {
-        _messages.add(ChatMessage(
-          text: _messageController.text.trim(),
-          isSent: true,
-        ));
+        _isLoading = true;
       });
-      _messageController.clear();
     }
+
+    try {
+      _sessionId = await SessionManager.getSessionId();
+      List<ChatMessage> messages = await ChatApiService.getMessages(_sessionId);
+
+      setState(() {
+        _messages = messages;
+        if (showLoading) _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        if (showLoading) _isLoading = false;
+      });
+      _showErrorSnackBar('Failed to load chat history');
+    }
+  }
+
+  Future<void> _sendMessage() async {
+    if (_messageController.text.trim().isEmpty || _isSending) return;
+
+    String messageText = _messageController.text.trim();
+    _messageController.clear();
+
+    setState(() {
+      _isSending = true;
+    });
+
+    try {
+      Map<String, dynamic> response = await ChatApiService.sendMessage(messageText, _sessionId);
+
+      if (response.isNotEmpty) {
+        // Save session ID if it's a new session
+        if (_sessionId == null && response['session_id'] != null) {
+          _sessionId = response['session_id'];
+          await SessionManager.saveSessionId(_sessionId!);
+        }
+
+        // Refresh the entire chat history from the database
+        await _loadChatHistory(showLoading: false);
+      }
+    } catch (e) {
+      _showErrorSnackBar('Failed to send message');
+    } finally {
+      setState(() {
+        _isSending = false;
+      });
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   @override
@@ -241,7 +388,7 @@ class _ChatPopupState extends State<ChatPopup> {
                       ),
                     ),
                     Text(
-                      'Your Ai Agent',
+                      _sessionId != null ? 'Session: $_sessionId' : 'Your AI Agent',
                       style: GoogleFonts.poppins(
                         color: Colors.grey[600],
                         fontSize: 12,
@@ -249,6 +396,10 @@ class _ChatPopupState extends State<ChatPopup> {
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                icon: Icon(Icons.refresh, color: Colors.black),
+                onPressed: () => _loadChatHistory(showLoading: true),
               ),
               IconButton(
                 icon: Icon(Icons.close, color: Colors.black),
@@ -268,14 +419,19 @@ class _ChatPopupState extends State<ChatPopup> {
                 topRight: Radius.circular(30),
               ),
             ),
-            child: Container(
+            child: _isLoading
+                ? Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+              ),
+            )
+                : Container(
               padding: EdgeInsets.all(16),
               child: ListView.builder(
                 controller: widget.scrollController,
-                reverse: true,
                 itemCount: _messages.length,
                 itemBuilder: (context, index) {
-                  return _buildMessageBubble(_messages[_messages.length - 1 - index]);
+                  return _buildMessageBubble(_messages[index]);
                 },
               ),
             ),
@@ -292,8 +448,7 @@ class _ChatPopupState extends State<ChatPopup> {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment:
-        message.isSent ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: message.isSent ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           Container(
             constraints: BoxConstraints(
@@ -306,7 +461,7 @@ class _ChatPopupState extends State<ChatPopup> {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              message.text,
+              message.content,
               style: GoogleFonts.poppins(
                 color: Colors.white,
                 fontSize: 16,
@@ -337,10 +492,11 @@ class _ChatPopupState extends State<ChatPopup> {
                 controller: _messageController,
                 style: GoogleFonts.poppins(color: Colors.white),
                 decoration: InputDecoration(
-                  hintText: 'Message...',
+                  hintText: _isSending ? 'Sending...' : 'Message...',
                   hintStyle: GoogleFonts.poppins(color: Colors.grey[500]),
                   border: InputBorder.none,
                 ),
+                enabled: !_isSending,
                 onSubmitted: (_) => _sendMessage(),
               ),
             ),
@@ -348,12 +504,21 @@ class _ChatPopupState extends State<ChatPopup> {
           SizedBox(width: 12),
           Container(
             decoration: BoxDecoration(
-              color: Colors.red[800],
+              color: _isSending ? Colors.grey[600] : Colors.red[800],
               shape: BoxShape.circle,
             ),
             child: IconButton(
-              icon: Icon(Icons.arrow_upward_rounded, color: Colors.white),
-              onPressed: _sendMessage,
+              icon: _isSending
+                  ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+                  : Icon(Icons.arrow_upward_rounded, color: Colors.white),
+              onPressed: _isSending ? null : _sendMessage,
             ),
           ),
         ],
@@ -363,11 +528,39 @@ class _ChatPopupState extends State<ChatPopup> {
 }
 
 class ChatMessage {
-  final String text;
-  final bool isSent;
+  final int id;
+  final int sessionId;
+  final String sender;
+  final String content;
+  final DateTime timestamp;
 
   ChatMessage({
-    required this.text,
-    required this.isSent,
+    required this.id,
+    required this.sessionId,
+    required this.sender,
+    required this.content,
+    required this.timestamp,
   });
+
+  bool get isSent => sender == 'user';
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      id: json['id'],
+      sessionId: json['session_id'],
+      sender: json['sender'],
+      content: json['content'],
+      timestamp: DateTime.parse(json['timestamp']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'session_id': sessionId,
+      'sender': sender,
+      'content': content,
+      'timestamp': timestamp.toIso8601String(),
+    };
+  }
 }
