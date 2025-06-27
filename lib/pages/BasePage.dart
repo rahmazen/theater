@@ -10,6 +10,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../pointBalence.dart';
+
 class BasePage extends StatefulWidget {
   const BasePage({super.key});
 
@@ -157,6 +159,11 @@ class _BasePageState extends State<BasePage> {
                 ),
               ],
             ),
+          ),
+          Positioned(
+            top: 15,
+            right: 16,
+            child: const PointsBalance(),
           ),
         ],
       ),

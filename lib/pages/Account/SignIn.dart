@@ -1,9 +1,109 @@
+import 'dart:convert';
+import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'SignUp.dart';
 
-class SignInScreen extends StatelessWidget {
-  const SignInScreen({Key? key}) : super(key: key);
+import '../BasePage.dart';
+import 'SignUp.dart';
+import 'package:http/http.dart' as http;
+
+import 'authProvider.dart';
+
+
+class SignInScreen extends StatefulWidget {
+  final Widget? redirectToPage; // New parameter to store the page to redirect to
+
+  const SignInScreen({Key? key, this.redirectToPage}) : super(key: key);
+
+  @override
+  State<SignInScreen> createState() => _SignInScreenState();
+}
+
+class _SignInScreenState extends State<SignInScreen> {
+  // Controllers for text fields
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  // State variables
+  bool _rememberMe = true;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> login() async {
+    // Validate inputs
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please enter both username and password'),
+          backgroundColor: Colors.red[600],
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await http.post(Uri.parse('http://127.0.0.1:8000/token/'),
+        body: {
+          'username': _emailController.text,
+          'password': _passwordController.text,
+        },
+      );
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (response.statusCode == 200) {
+        print(response.body);
+        if (mounted) {
+          final data = json.decode(response.body);
+          context.read<AuthProvider>().signIn(data);
+          if (widget.redirectToPage != null) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => widget.redirectToPage!),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => BasePage()),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Password or username incorrect, try again'),
+              backgroundColor: Colors.red[600],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed connecting to the server, check your network and try again.'),
+            backgroundColor: Colors.red[600],
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,9 +118,9 @@ class SignInScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(height: 25,),
+              SizedBox(height: 25),
               GestureDetector(
-                onTap: () => Navigator.pop(context),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => BasePage())),
                 child: Row(
                   children: [
                     Icon(Icons.arrow_back_ios_rounded, color: Colors.red[300], size: screenWidth * 0.05),
@@ -34,15 +134,19 @@ class SignInScreen extends StatelessWidget {
               SizedBox(height: screenHeight * 0.01),
               Text('Sign in to continue', style: GoogleFonts.nunito(fontSize: screenWidth * 0.04, color: Colors.grey[400])),
               SizedBox(height: screenHeight * 0.03),
-              _buildTextField('Email', 'Enter your email', false, screenWidth),
+              _buildTextField('Username', 'Enter your username', false, screenWidth, _emailController),
               SizedBox(height: screenHeight * 0.02),
-              _buildTextField('Password', '••••••••••', true, screenWidth),
+              _buildTextField('Password', '••••••••••', true, screenWidth, _passwordController),
               SizedBox(height: screenHeight * 0.02),
               Row(
                 children: [
                   Checkbox(
-                    value: true,
-                    onChanged: (val) {},
+                    value: _rememberMe,
+                    onChanged: (val) {
+                      setState(() {
+                        _rememberMe = val ?? true;
+                      });
+                    },
                     activeColor: Colors.red[600],
                     checkColor: Colors.white,
                     side: BorderSide(color: Colors.red[300]!),
@@ -60,15 +164,25 @@ class SignInScreen extends StatelessWidget {
                 width: double.infinity,
                 height: screenHeight * 0.06,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: _isLoading ? null : login,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red[600],
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 4,
                     shadowColor: Colors.red[600]!.withOpacity(0.3),
+                    disabledBackgroundColor: Colors.red[400],
                   ),
-                  child: Text('Sign In', style: GoogleFonts.nunito(fontSize: screenWidth * 0.04, color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: _isLoading
+                      ? SizedBox(
+                    width: screenWidth * 0.05,
+                    height: screenWidth * 0.05,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                      : Text('Sign In', style: GoogleFonts.nunito(fontSize: screenWidth * 0.04, color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
               SizedBox(height: screenHeight * 0.03),
@@ -145,13 +259,14 @@ class SignInScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTextField(String label, String hintText, bool isPassword, double screenWidth) {
+  Widget _buildTextField(String label, String hintText, bool isPassword, double screenWidth, TextEditingController controller) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: GoogleFonts.nunito(fontSize: screenWidth * 0.035, fontWeight: FontWeight.w600, color: Colors.grey[300])),
         SizedBox(height: screenWidth * 0.02),
         TextField(
+          controller: controller,
           cursorColor: Colors.red[400],
           style: GoogleFonts.nunito(color: Colors.white),
           obscureText: isPassword,
@@ -161,16 +276,16 @@ class SignInScreen extends StatelessWidget {
             filled: true,
             fillColor: Colors.grey[900],
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
             ),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.red[400]!, width: 1),
             ),
             contentPadding: EdgeInsets.symmetric(horizontal: screenWidth * 0.04, vertical: screenWidth * 0.04),
           ),

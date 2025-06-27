@@ -1,7 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
-class ProfilePage extends StatelessWidget {
+import 'Account/SignIn.dart';
+import 'Account/authProvider.dart';
+
+class ProfilePage extends StatefulWidget {
+  const ProfilePage({Key? key}) : super(key: key);
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
   // App colors for dark mode
   static const Color primaryBlack = Color(0xFF000000);
   static const Color cardBlack = Color(0xFF1A1A1A);
@@ -10,192 +21,253 @@ class ProfilePage extends StatelessWidget {
   static const Color lightGrey = Color(0xFFD1D5DB);
   static const Color darkGrey = Color(0xFF374151);
 
-  const ProfilePage({Key? key}) : super(key: key);
+  @override
+  void initState() {
+    super.initState();
+    // Check authentication status when the page loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAuthenticationStatus();
+    });
+  }
+
+  void _checkAuthenticationStatus() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    // If user is not authenticated, redirect to sign-in screen
+    if (!authProvider.isAuthenticated || authProvider.authData == null) {
+
+      Navigator.of(context).push(
+         MaterialPageRoute(builder: (context) => SignInScreen()),
+       );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: primaryBlack,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                // Header
-                Row(
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        // Show loading indicator if auth data is being loaded
+        if (authProvider.authData == null && authProvider.isAuthenticated) {
+          return const Scaffold(
+            backgroundColor: primaryBlack,
+            body: Center(
+              child: CircularProgressIndicator(
+                color: primaryRed,
+              ),
+            ),
+          );
+        }
+
+        // If not authenticated, show empty container (redirect will handle navigation)
+        if (!authProvider.isAuthenticated || authProvider.authData == null) {
+          return const Scaffold(
+            backgroundColor: primaryBlack,
+            body: SizedBox.shrink(),
+          );
+        }
+
+        final authData = authProvider.authData!;
+
+        return Scaffold(
+          backgroundColor: primaryBlack,
+          body: SafeArea(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
                   children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          // color: cardBlack,
-                          borderRadius: BorderRadius.circular(12),
+                    // Header
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              // color: cardBlack,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.arrow_back_ios_new,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new,
-                          color: Colors.white,
-                          size: 18,
+                        Expanded(
+                          child: Text(
+                            'Profile',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
+                        const SizedBox(width: 42),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Main Profile Card
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: cardBlack,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Column(
+                        children: [
+                          // Profile Header Section
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              children: [
+                                // Profile Avatar
+                                Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      colors: [primaryRed, primaryRed.withOpacity(0.8)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                  ),
+                                  child: authData.image.isNotEmpty
+                                      ? ClipOval(
+                                    child: Image.network(
+                                      authData.image,
+                                      width: 80,
+                                      height: 80,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return const Icon(
+                                          Icons.person,
+                                          color: Colors.white,
+                                          size: 35,
+                                        );
+                                      },
+                                    ),
+                                  )
+                                      : const Icon(
+                                    Icons.person,
+                                    color: Colors.white,
+                                    size: 35,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Name - Use fullname from auth data
+                                Text(
+                                  authData.fullname.isNotEmpty ? authData.fullname : authData.username,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+
+                                // Email - Use email from auth data
+                                Text(
+                                  authData.email,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: primaryGrey,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Divider
+                          Container(
+                            height: 1,
+                            margin: const EdgeInsets.symmetric(horizontal: 24),
+                            color: darkGrey,
+                          ),
+
+                          // Menu Items
+                          _buildMenuItem(
+                            icon: Icons.person_outline,
+                            title: 'My Profile',
+                            onTap: () {
+                              // Navigate to edit profile
+                            },
+                          ),
+
+                          _buildMenuItem(
+                            icon: Icons.settings_outlined,
+                            title: 'Settings',
+                            onTap: () {
+                              // Navigate to settings
+                            },
+                          ),
+
+                          _buildMenuItem(
+                            icon: Icons.notifications_outlined,
+                            title: 'Notifications',
+                            onTap: () {
+                              // Navigate to notifications
+                            },
+                          ),
+
+                          _buildMenuItem(
+                            icon: Icons.history_outlined,
+                            title: 'Transaction History',
+                            onTap: () {
+                              // Navigate to transaction history
+                            },
+                          ),
+
+                          _buildMenuItem(
+                            icon: Icons.help_outline,
+                            title: 'FAQ',
+                            onTap: () {
+                              // Navigate to FAQ
+                            },
+                          ),
+
+                          _buildMenuItem(
+                            icon: Icons.info_outline,
+                            title: 'About App',
+                            onTap: () {
+                              // Navigate to about app
+                            },
+                          ),
+
+                          // Divider before logout
+                          Container(
+                            height: 1,
+                            margin: const EdgeInsets.symmetric(horizontal: 24),
+                            color: darkGrey,
+                          ),
+
+                          _buildMenuItem(
+                            icon: Icons.logout_outlined,
+                            title: 'Logout',
+                            isLogout: true,
+                            onTap: () {
+                              _showLogoutDialog(context);
+                            },
+                          ),
+                        ],
                       ),
                     ),
-                    Expanded(
-                      child: Text(
-                        'Profile',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                     SizedBox(width: 42),
+
+                    const SizedBox(height: 32),
                   ],
                 ),
-
-                const SizedBox(height: 20),
-
-                // Main Profile Card
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: cardBlack,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Column(
-                    children: [
-                      // Profile Header Section
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          children: [
-                            // Profile Avatar
-                            Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: [primaryRed, primaryRed.withOpacity(0.8)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.theater_comedy,
-                                color: Colors.white,
-                                size: 35,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Name
-                            Text(
-                              'Rahma Zen',
-                              style: GoogleFonts.poppins(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-
-                            // Email
-                            Text(
-                              'rahma@gmail.com',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                color: primaryGrey,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Divider
-                      Container(
-                        height: 1,
-                        margin: const EdgeInsets.symmetric(horizontal: 24),
-                        color: darkGrey,
-                      ),
-
-                      // Menu Items
-                      _buildMenuItem(
-                        icon: Icons.person_outline,
-                        title: 'My Profile',
-                        onTap: () {
-                          // Navigate to edit profile
-                        },
-                      ),
-
-                      _buildMenuItem(
-                        icon: Icons.settings_outlined,
-                        title: 'Settings',
-                        onTap: () {
-                          // Navigate to settings
-                        },
-                      ),
-
-                      _buildMenuItem(
-                        icon: Icons.notifications_outlined,
-                        title: 'Notifications',
-                        onTap: () {
-                          // Navigate to notifications
-                        },
-                      ),
-
-                      _buildMenuItem(
-                        icon: Icons.history_outlined,
-                        title: 'Transaction History',
-                        onTap: () {
-                          // Navigate to transaction history
-                        },
-                      ),
-
-                      _buildMenuItem(
-                        icon: Icons.help_outline,
-                        title: 'FAQ',
-                        onTap: () {
-                          // Navigate to FAQ
-                        },
-                      ),
-
-                      _buildMenuItem(
-                        icon: Icons.info_outline,
-                        title: 'About App',
-                        onTap: () {
-                          // Navigate to about app
-                        },
-                      ),
-
-                      // Divider before logout
-                      Container(
-                        height: 1,
-                        margin: const EdgeInsets.symmetric(horizontal: 24),
-                        color: darkGrey,
-                      ),
-
-                      _buildMenuItem(
-                        icon: Icons.logout_outlined,
-                        title: 'Logout',
-                        isLogout: true,
-                        onTap: () {
-                          _showLogoutDialog(context);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -258,7 +330,7 @@ class ProfilePage extends StatelessWidget {
           ),
           contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
           titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-          actionsPadding: const EdgeInsets.fromLTRB(0, 24, 0, 0), // Increased top padding
+          actionsPadding: const EdgeInsets.fromLTRB(0, 24, 0, 0),
 
           title: Column(
             mainAxisSize: MainAxisSize.min,
@@ -276,7 +348,7 @@ class ProfilePage extends StatelessWidget {
                   size: 28,
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               Text(
                 'Sign Out',
                 style: GoogleFonts.poppins(
@@ -303,7 +375,7 @@ class ProfilePage extends StatelessWidget {
                   letterSpacing: -0.2,
                 ),
               ),
-              const SizedBox(height: 32), // Add spacing to push buttons down
+              const SizedBox(height: 32),
             ],
           ),
 
@@ -361,10 +433,14 @@ class ProfilePage extends StatelessWidget {
                         // Sign Out Button
                         Expanded(
                           child: TextButton(
-                            onPressed: () {
+                            onPressed: () async {
                               Navigator.of(context).pop();
 
-                              // Handle logout logic here
+                              // Use AuthProvider to handle logout
+                              final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                              await authProvider.signOut();
+
+                              // Show success message
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Row(
@@ -395,6 +471,17 @@ class ProfilePage extends StatelessWidget {
                                   duration: const Duration(seconds: 3),
                                 ),
                               );
+
+                              // Redirect to sign-in screen
+                              Navigator.of(context).pushNamedAndRemoveUntil(
+                                '/signin', // Replace with your sign-in route
+                                    (route) => false,
+                              );
+                              // Or if you're using direct navigation:
+                              // Navigator.of(context).pushAndRemoveUntil(
+                              //   MaterialPageRoute(builder: (context) => SignInScreen()),
+                              //   (route) => false,
+                              // );
                             },
                             style: TextButton.styleFrom(
                               backgroundColor: Colors.transparent,
@@ -427,4 +514,5 @@ class ProfilePage extends StatelessWidget {
         );
       },
     );
-  }}
+  }
+}

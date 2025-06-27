@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http ;
+import 'dart:convert' ;
+import 'package:intl/intl.dart';
+import 'package:intl/intl.dart';
 
 class TheaterHomePage extends StatefulWidget {
   @override
@@ -12,48 +16,202 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
   final ScrollController _scrollController = ScrollController();
   int _currentIndex = 0;
   double _scrollOffset = 0.0;
+  bool isLoadingTodays = false ;
+  bool isLoadingWeeks = false ;
+  bool isLoadingFavorites = false ;
+  bool isLoadingUpcoming = false ;
+List<dynamic> todaysEvents =[
+  {
+    "id": 3,
+    "content": {
+      "id": 2,
+      "title": "loading...",
+      "description": "loading...",
+      "genre": "live performance",
+      "duration_minutes": 0,
+      "release_year": null,
+      "poster": "/media/catalogue/posters/ballet2.jpg",
+      "trailer_url": null,
+      "rating": null,
+      "language": null,
+      "subtitles": false
+    },
 
-  final List<Map<String, dynamic>> _movies = [
-    {
-      'title': 'BATMAN',
-      'subtitle': '2022 • Action, Crime, Drama',
-      'rating': '8.2',
-      'color': Colors.grey[800]!,
-      'gradient': [Colors.grey[900]!, Colors.grey[700]!],
-      'backgroundImage': 'https://images.unsplash.com/photo-1635805737707-575885ab0820?w=800&h=1200&fit=crop&crop=faces',
-    },
-    {
-      'title': 'JOKER',
-      'subtitle': '2019 • Crime, Drama, Thriller',
-      'rating': '8.7',
-      'color': Colors.grey[800]!,
-      'gradient': [Colors.grey[900]!, Colors.grey[700]!],
-      'backgroundImage': 'https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?w=800&h=1200&fit=crop&crop=faces',
-    },
-    {
-      'title': 'BALLET ',
-      'subtitle': '21st january • Watch the eurapean ballet',
-      'rating': '',
-      'color': Colors.grey[800]!,
-      'gradient': [Colors.grey[900]!, Colors.grey[700]!],
-      'backgroundImage': 'assets/ballet2.jpg',
-    },
-    {
-      'title': 'DUNE',
-      'subtitle': '2021 • Adventure, Drama, Sci-Fi',
-      'rating': '8.0',
-      'color': Colors.grey[800]!,
-      'gradient': [Colors.grey[900]!, Colors.grey[700]!],
-      'backgroundImage': 'https://images.unsplash.com/photo-1446776653964-20c1d3a81b06?w=800&h=1200&fit=crop&crop=faces',
-    },{
-      'title': 'MALOUF',
-      'subtitle': '25th May • Mouhamed Benwahab',
-      'rating': '',
-      'color': Colors.grey[800]!,
-      'gradient': [Colors.grey[900]!, Colors.grey[700]!],
-      'backgroundImage': 'assets/malouf.jpg',
-    },
+    "start_time": "2025-06-25T22:00:00Z",
+    "event_type": "play",
+    "end_time": "2025-06-25T23:40:00Z",
+    "ticket_price": "1000.00",
+    "minimum_age": 0,
+    "is_sold_out": false
+  },
+];
+List<dynamic> thisWeeksEvents =[  {
+  "id": 3,
+  "content": {
+    "id": 2,
+    "title": "loading...",
+    "description": "loading...",
+    "genre": "live performance",
+    "duration_minutes": 0,
+    "release_year": null,
+    "poster": "/media/catalogue/posters/ballet2.jpg",
+    "trailer_url": null,
+    "rating": null,
+    "language": null,
+    "subtitles": false
+  },
+
+  "start_time": "2025-06-25T22:00:00Z",
+  "event_type": "play",
+  "end_time": "2025-06-25T23:40:00Z",
+  "ticket_price": "1000.00",
+  "minimum_age": 0,
+  "is_sold_out": false
+},];
+List<dynamic> upcomingEvents =[
+  {
+  "id": 3,
+  "title": "loading...",
+  "description": "loading...",
+  "genre": "musical",
+  "duration_minutes": 0,
+  "release_year": 0000,
+  "poster": null,
+  "trailer_url": null,
+  "rating": null,
+  "language": null,
+  "subtitles": false
+  },
   ];
+List<dynamic> audienceFavorites =[  {
+  "id": 3,
+  "content": {
+    "id": 2,
+    "title": "loading...",
+    "description": "loading...",
+    "genre": "live performance",
+    "duration_minutes": 0,
+    "release_year": null,
+    "poster": "/media/catalogue/posters/ballet2.jpg",
+    "trailer_url": null,
+    "rating": null,
+    "language": null,
+    "subtitles": false
+  },
+
+  "start_time": "2025-06-25T22:00:00Z",
+  "event_type": "play",
+  "end_time": "2025-06-25T23:40:00Z",
+  "ticket_price": "1000.00",
+  "minimum_age": 0,
+  "is_sold_out": false
+},];
+
+
+
+  Future<void> _loadTodaysEvents() async {
+    try {
+      setState(() => isLoadingTodays = true);
+      print('loading today events .....................');
+
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/client/todays_events/'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      print(response.body);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        setState(() {
+          todaysEvents = data is List ? data : [data];
+          isLoadingTodays = false;
+          // Reset current index if needed
+          if (todaysEvents.isNotEmpty && _currentIndex >= todaysEvents.length) {
+            _currentIndex = 0;
+          }
+        });
+      } else {
+        throw Exception('Failed to load today\'s events');
+      }
+    } catch (e) {
+      print('Error loading today\'s events: $e');
+      setState(() => isLoadingTodays = false);
+    }
+  }
+
+  Future<void> _loadThisWeeksEvents() async {
+    try {
+      setState(() => isLoadingWeeks = true);
+      print('loading weeks evennts .....................');
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/client/weeks_events/'),
+        headers: {'Content-Type': 'application/json'},
+      );
+        print (response.body) ;
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          thisWeeksEvents = data is List ? data : [data];
+          isLoadingWeeks = false;
+        });
+      } else {
+        throw Exception('Failed to load this week\'s events');
+      }
+    } catch (e) {
+      print('Error loading this week\'s events: $e');
+      setState(() => isLoadingWeeks = false);
+    }
+  }
+
+  Future<void> _loadAudienceFavorites() async {
+    try {
+      setState(() => isLoadingFavorites = true);
+
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/client/upcoming/'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          audienceFavorites = data is List ? data : [data];
+          isLoadingFavorites = false;
+        });
+      } else {
+        throw Exception('Failed to load audience favorites');
+      }
+    } catch (e) {
+      print('Error loading audience favorites: $e');
+      setState(() => isLoadingFavorites = false);
+    }
+  }
+
+  Future<void> _loadUpcomingEvents() async {
+    try {
+      setState(() => isLoadingUpcoming = true);
+
+      final response = await http.get(
+        Uri.parse('http://127.0.0.1:8000/client/upcoming/'),
+        headers: {'Content-Type': 'application/json'},
+      );
+            print(response.body) ;
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          upcomingEvents = data is List ? data : [data];
+          isLoadingUpcoming = false;
+        });
+      } else {
+        throw Exception('Failed to load upcoming events');
+      }
+    } catch (e) {
+      print('Error loading upcoming events: $e');
+      setState(() => isLoadingUpcoming = false);
+    }
+  }
+
+
 
   @override
   void initState() {
@@ -63,6 +221,10 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
         _scrollOffset = _scrollController.offset;
       });
     });
+    _loadTodaysEvents();
+    _loadThisWeeksEvents();
+    _loadUpcomingEvents();
+
   }
 
   @override
@@ -84,7 +246,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
             transform: Matrix4.identity()..translate(0, -_scrollOffset * 0.3),
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: NetworkImage(_movies[_currentIndex]['backgroundImage']),
+                image: NetworkImage('http://127.0.0.1:8000${todaysEvents[_currentIndex]['content']['poster']}'),
                 fit: BoxFit.cover,
                 colorFilter: ColorFilter.mode(
                   Colors.black.withOpacity(0.6),
@@ -99,8 +261,8 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  _movies[_currentIndex]['gradient'][0].withOpacity(0.7),
-                  _movies[_currentIndex]['gradient'][1].withOpacity(0.5),
+                Colors.grey[900]!.withOpacity(0.7),
+                Colors.grey[700]!.withOpacity(0.5),
                   Colors.black.withOpacity(0.8),
                 ],
                 begin: Alignment.topCenter,
@@ -128,18 +290,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
           CustomScrollView(
             controller: _scrollController,
             slivers: [
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
-              // App Bar Section
 
-
-              // Hero Content Section
               SliverToBoxAdapter(
                 child: Container(
                   height: 400,
@@ -148,7 +299,6 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // New Show Badge
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
@@ -157,7 +307,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child:  Text(
-                          'NEW SHOW',
+                          'today\'s schedule',
                           style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 12,
@@ -172,11 +322,11 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
                         child: Text(
-                          _movies[_currentIndex]['title'],
-                          key: ValueKey(_movies[_currentIndex]['title']),
+                          todaysEvents[_currentIndex]['content']['title'] ,
+                          key: ValueKey(todaysEvents[_currentIndex]['content']['title']),
                           style:  GoogleFonts.poppins(
                             color: Colors.white,
-                            fontSize: 48,
+                            fontSize: 38,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 2,
                           ),
@@ -227,8 +377,8 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
                         child: Text(
-                          _movies[_currentIndex]['subtitle'],
-                          key: ValueKey(_movies[_currentIndex]['subtitle']),
+                          todaysEvents[_currentIndex]['content']['description'],
+                          key: ValueKey(todaysEvents[_currentIndex]['content']['description']),
                           style: GoogleFonts.poppins(
                             color: Colors.white.withOpacity(0.8),
                             fontSize: 16,
@@ -278,7 +428,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                         _currentIndex = index;
                       });
                     },
-                    itemCount: _movies.length,
+                    itemCount: todaysEvents.length,
                     itemBuilder: (context, index) {
                       final scale = _currentIndex == index ? 1.0 : 0.85;
                       return AnimatedContainer(
@@ -289,7 +439,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                         child: Container(
                           decoration: BoxDecoration(
                             image: DecorationImage(
-                              image: NetworkImage(_movies[index]['backgroundImage']),
+                              image: NetworkImage('http://127.0.0.1:8000${todaysEvents[_currentIndex]['content']['poster']}'),
                               fit: BoxFit.cover,
                               colorFilter: ColorFilter.mode(
                                 Colors.black.withOpacity(0.4),
@@ -331,7 +481,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      _movies[index]['title'],
+                                      todaysEvents[_currentIndex]['content']['title'],
                                       style:  GoogleFonts.poppins(
                                         color: Colors.white,
                                         fontSize: 18,
@@ -340,7 +490,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      _movies[index]['subtitle'].split('•')[0],
+                                      todaysEvents[_currentIndex]['content']['type'] ?? '',
                                       style: GoogleFonts.poppins(
                                         color: Colors.white.withOpacity(0.8),
                                         fontSize: 12,
@@ -358,7 +508,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                 ),
               ),
 
-              // Performances and Theater Activities Section
+              // Fixed: Remove nested SliverToBoxAdapter and flatten the structure
               SliverToBoxAdapter(
                 child: Container(
                   padding: const EdgeInsets.all(30),
@@ -366,7 +516,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Section Title
-                       Text(
+                      Text(
                         'Live Performances',
                         style: GoogleFonts.poppins(
                           color: Colors.white,
@@ -431,7 +581,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                       color: Colors.yellow[600],
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child:  Text(
+                                    child: Text(
                                       'TONIGHT',
                                       style: GoogleFonts.poppins(
                                         color: Colors.black,
@@ -441,7 +591,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                     ),
                                   ),
                                   const SizedBox(height: 12),
-                                   Text(
+                                  Text(
                                     'The Phantom of the Opera',
                                     style: GoogleFonts.poppins(
                                       color: Colors.white,
@@ -464,16 +614,10 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                         ),
                       ),
 
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 60), // Combined spacing
 
-                      // Theater Activities Grid
-
-
-
-                      const SizedBox(height: 30),
-
-                      // Upcoming Performances
-                       Text(
+                      // This Week Section Title
+                      Text(
                         'This Week',
                         style: GoogleFonts.poppins(
                           color: Colors.white,
@@ -484,34 +628,11 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
 
                       const SizedBox(height: 20),
 
-                      // Performance List
-                      ...List.generate(3, (index) {
-                        final performances = [
-                          {
-                            'title': 'Romeo and Juliet',
-                            'date': 'Wed, Jun 21',
-                            'time': '7:30 PM',
-                            'venue': 'Main Stage',
-                            'price': '',
-                            'color': Colors.red[700],
-                          },
-                          {
-                            'title': 'Chicago',
-                            'date': 'Fri, Jun 23',
-                            'time': '8:00 PM',
-                            'venue': 'Broadway Hall',
-                            'price': '',
-                            'color': Colors.blue[700],
-                          },
-                          {
-                            'title': 'Les Misérables',
-                            'date': 'Sat, Jun 24',
-                            'time': '2:00 PM',
-                            'venue': 'Grand Theater',
-                            'price': '',
-                            'color': Colors.amber[700],
-                          },
-                        ];
+                      // Performance List - Using dynamic data
+                      ...thisWeeksEvents.map((event) {
+                        DateTime startTime = DateTime.parse(event['start_time']);
+                        String formattedDate = DateFormat('EEE, MMM d').format(startTime);
+                        String formattedTime = DateFormat('h:mm a').format(startTime);
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 16),
@@ -535,7 +656,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                       width: 4,
                                       height: 60,
                                       decoration: BoxDecoration(
-                                        color: performances[index]['color'] as Color,
+                                        color: Colors.blue[700],
                                         borderRadius: BorderRadius.circular(2),
                                       ),
                                     ),
@@ -545,8 +666,8 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            performances[index]['title']!.toString() ?? '',
-                                            style:  GoogleFonts.poppins(
+                                            event['content']['title'] ?? 'No Title',
+                                            style: GoogleFonts.poppins(
                                               color: Colors.white,
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,
@@ -554,7 +675,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            '${performances[index]['venue']} • ${performances[index]['time']}',
+                                            '${event['content']['genre'] ?? 'Unknown Genre'} • $formattedTime',
                                             style: GoogleFonts.poppins(
                                               color: Colors.white.withOpacity(0.8),
                                               fontSize: 14,
@@ -562,7 +683,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            performances[index]['date']!.toString() ?? '',
+                                            formattedDate,
                                             style: GoogleFonts.poppins(
                                               color: Colors.white.withOpacity(0.6),
                                               fontSize: 12,
@@ -574,31 +695,27 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.end,
                                       children: [
-                                        Text(
-                                          performances[index]['price']!.toString() ?? '',
-                                          style:  GoogleFonts.poppins(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
+                                        // Event type badge
                                         Container(
                                           padding: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.2),
-                                            borderRadius: BorderRadius.circular(15),
+                                              horizontal: 8,
+                                              vertical: 4
                                           ),
-                                          child:  Text(
-                                            'Book',
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue[700]?.withOpacity(0.3),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            event['content']['type']?.toString().toUpperCase() ?? 'EVENT',
                                             style: GoogleFonts.poppins(
                                               color: Colors.white,
-                                              fontSize: 12,
+                                              fontSize: 10,
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
                                         ),
+                                        const SizedBox(height: 8),
+
                                       ],
                                     ),
                                   ],
@@ -607,7 +724,7 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                             ),
                           ),
                         );
-                      }),
+                      }).toList(),
 
                       const SizedBox(height: 30),
                     ],
@@ -636,22 +753,13 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                                Text(
-                                'Movies',
+                                'Audience favorites',
                                 style: GoogleFonts.poppins(
                                   color: Colors.white,
-                                  fontSize: 28,
+                                  fontSize: 22,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                               Text(
-                                'View All',
-                                style: GoogleFonts.poppins(
-                                  color: Colors.grey,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-
 
                             ],
                           ),
@@ -699,38 +807,6 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
 
                         const SizedBox(height: 30),
 
-                         Text(
-                          'Trending',
-                          style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildTrendingCard(
-                                  'JOKER', 4.7, Colors.grey.withOpacity(0.2)),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildTrendingCard(
-                                  'Frozen 2', 4.3, Colors.grey.withOpacity(0.2)),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildTrendingCard(
-                                  'Ford v Ferrari', 4.5, Colors.grey.withOpacity(0.2)),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 30),
-
                         // Additional Content Section
                          Text(
                           'Coming Soon',
@@ -744,12 +820,19 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                         const SizedBox(height: 16),
 
                         // Coming Soon Movies List
-                        ...List.generate(3, (index) {
-                          final comingSoonMovies = [
-                            {'title': 'Avatar: The Way of Water', 'date': 'Dec 16, 2024', 'genre': 'Sci-Fi, Adventure'},
-                            {'title': 'Black Panther: Wakanda Forever', 'date': 'Nov 11, 2024', 'genre': 'Action, Drama'},
-                            {'title': 'The Flash', 'date': 'Jun 16, 2024', 'genre': 'Action, Adventure'},
-                          ];
+                        // Coming Soon Events List
+                        ...upcomingEvents.map((event) {
+                          // Format duration from minutes to hours and minutes
+                          String formatDuration(int? minutes) {
+                            if (minutes == null) return 'Duration unknown';
+                            int hours = minutes ~/ 60;
+                            int remainingMinutes = minutes % 60;
+                            if (hours > 0) {
+                              return '${hours}h ${remainingMinutes}m';
+                            } else {
+                              return '${minutes}m';
+                            }
+                          }
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
@@ -767,7 +850,18 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                     color: Colors.grey[300],
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: Icon(Icons.movie, color: Colors.grey[600]),
+                                  child: event['poster'] != null
+                                      ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+    'http://127.0.0.1:8000${event['poster']}',
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Icon(Icons.movie, color: Colors.grey[600]);
+                                      },
+                                    ),
+                                  )
+                                      : Icon(Icons.movie, color: Colors.grey[600]),
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
@@ -775,8 +869,8 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        comingSoonMovies[index]['title']!,
-                                        style:  GoogleFonts.poppins(
+                                        event['title'] ?? 'No Title',
+                                        style: GoogleFonts.poppins(
                                           fontSize: 16,
                                           fontWeight: FontWeight.bold,
                                           color: Colors.white,
@@ -784,29 +878,81 @@ class _TheaterHomePageState extends State<TheaterHomePage> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        comingSoonMovies[index]['genre']!,
+                                        event['genre'] ?? 'Unknown Genre',
                                         style: GoogleFonts.poppins(
                                           fontSize: 14,
                                           color: Colors.grey[600],
                                         ),
                                       ),
                                       const SizedBox(height: 4),
-                                      Text(
-                                        comingSoonMovies[index]['date']!,
-                                        style:  GoogleFonts.poppins(
-                                          fontSize: 12,
-                                          color: Colors.deepOrange[200],
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                                      Row(
+                                        children: [
+                                          Text(
+                                            event['release_year']?.toString() ?? 'Year unknown',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 12,
+                                              color: Colors.deepOrange[200],
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            formatDuration(event['duration_minutes']),
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 11,
+                                              color: Colors.grey[500],
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
                                       ),
+                                      if (event['description'] != null && event['description'].isNotEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 4),
+                                          child: Text(
+                                            event['description'],
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 11,
+                                              color: Colors.grey[400],
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),
-                                Icon(Icons.notifications_outlined, color: Colors.grey[600]),
+                                Column(
+                                  children: [
+                                    if (event['rating'] != null)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.withOpacity(0.3),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          event['rating'].toString(),
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 10,
+                                            color: Colors.amber,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    const SizedBox(height: 8),
+                                    Icon(Icons.notifications_outlined, color: Colors.grey[600]),
+                                  ],
+                                ),
                               ],
                             ),
                           );
-                        }),
+                        }).toList(),
+
+                        const SizedBox(height: 50), // Bottom padding
 
                         const SizedBox(height: 50), // Bottom padding
                       ],
