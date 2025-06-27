@@ -321,8 +321,18 @@ class _ChatPopupState extends State<ChatPopup> {
     String messageText = _messageController.text.trim();
     _messageController.clear();
 
+    // Optimistically add the user's message to the chat
+    final tempMessage = ChatMessage(
+      id: DateTime.now().millisecondsSinceEpoch, // Temporary unique ID
+      sessionId: _sessionId ?? 0,
+      sender: 'user',
+      content: messageText,
+      timestamp: DateTime.now(),
+    );
+
     setState(() {
       _isSending = true;
+      _messages.add(tempMessage);
     });
 
     try {
@@ -340,6 +350,7 @@ class _ChatPopupState extends State<ChatPopup> {
       }
     } catch (e) {
       _showErrorSnackBar('Failed to send message');
+      // Optionally, you can mark the message as failed or remove it
     } finally {
       setState(() {
         _isSending = false;
