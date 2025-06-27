@@ -223,6 +223,7 @@ String replays = '' ;
                 ],
               ),
               if (rating > 0) Row(
+
                 children: [
                   ...List.generate(5, (index) {
                     return Icon(
@@ -760,7 +761,7 @@ String replays = '' ;
                                   ],
                                 ),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: List.generate(5, (index) {
                                     return GestureDetector(
                                       onTap: () {
@@ -784,8 +785,6 @@ String replays = '' ;
                             ),
 
                           ),
-
-
 
                           const SizedBox(height: 24),
                         ],
@@ -811,7 +810,6 @@ String replays = '' ;
                           style: GoogleFonts.poppins(color: Colors.grey),
                         );
                       }
-
                       return Column(
                         children: snapshot.data!.map((comment) => _buildReviewItem(
                           comment['user']['username'],

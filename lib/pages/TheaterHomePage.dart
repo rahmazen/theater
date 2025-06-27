@@ -6,6 +6,8 @@ import 'dart:convert' ;
 import 'package:intl/intl.dart';
 import 'package:intl/intl.dart';
 
+import 'TheaterShowDetailPage.dart';
+
 class TheaterHomePage extends StatefulWidget {
   @override
   _TheaterHomePageState createState() => _TheaterHomePageState();
@@ -316,7 +318,7 @@ List<dynamic> audienceFavorites =[  {
                         ),
                       ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 40),
 
                       // Movie Title
                       AnimatedSwitcher(
@@ -326,7 +328,7 @@ List<dynamic> audienceFavorites =[  {
                           key: ValueKey(todaysEvents[_currentIndex]['content']['title']),
                           style:  GoogleFonts.poppins(
                             color: Colors.white,
-                            fontSize: 38,
+                            fontSize: 34,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 2,
                           ),
@@ -371,7 +373,7 @@ List<dynamic> audienceFavorites =[  {
                         ),
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
 
                       // Movie Details
                       AnimatedSwitcher(
@@ -392,7 +394,16 @@ List<dynamic> audienceFavorites =[  {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: () {},
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TheaterShowDetailPage(
+                                  eventid: todaysEvents[_currentIndex]['id'].toString(),
+                                ),
+                              ),
+                            );
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             padding: const EdgeInsets.symmetric(vertical: 18),
@@ -490,7 +501,7 @@ List<dynamic> audienceFavorites =[  {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      todaysEvents[_currentIndex]['content']['type'] ?? '',
+                                      todaysEvents[_currentIndex]['event_type'] ?? '',
                                       style: GoogleFonts.poppins(
                                         color: Colors.white.withOpacity(0.8),
                                         fontSize: 12,
@@ -517,10 +528,10 @@ List<dynamic> audienceFavorites =[  {
                     children: [
                       // Section Title
                       Text(
-                        'Live Performances',
+                        ' ADDS',
                         style: GoogleFonts.poppins(
                           color: Colors.white,
-                          fontSize: 28,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 1,
                         ),
@@ -634,95 +645,109 @@ List<dynamic> audienceFavorites =[  {
                         String formattedDate = DateFormat('EEE, MMM d').format(startTime);
                         String formattedTime = DateFormat('h:mm a').format(startTime);
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.2),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 4,
-                                      height: 60,
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue[700],
-                                        borderRadius: BorderRadius.circular(2),
+                        return GestureDetector(
+                           onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TheaterShowDetailPage(
+                                eventid: event['id'].toString(),
+                              ),
+                            ),
+                          );
+                         },
+                          child:
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.2),
+                                        width: 1,
                                       ),
                                     ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            event['content']['title'] ?? 'No Title',
-                                            style: GoogleFonts.poppins(
-                                              color: Colors.white,
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '${event['content']['genre'] ?? 'Unknown Genre'} • $formattedTime',
-                                            style: GoogleFonts.poppins(
-                                              color: Colors.white.withOpacity(0.8),
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            formattedDate,
-                                            style: GoogleFonts.poppins(
-                                              color: Colors.white.withOpacity(0.6),
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                    child: Row(
                                       children: [
-                                        // Event type badge
                                         Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4
-                                          ),
+                                          width: 4,
+                                          height: 60,
                                           decoration: BoxDecoration(
-                                            color: Colors.blue[700]?.withOpacity(0.3),
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          child: Text(
-                                            event['content']['type']?.toString().toUpperCase() ?? 'EVENT',
-                                            style: GoogleFonts.poppins(
-                                              color: Colors.white,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                            color: Colors.blue[700],
+                                            borderRadius: BorderRadius.circular(2),
                                           ),
                                         ),
-                                        const SizedBox(height: 8),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                event['content']['title'] ?? 'No Title',
+                                                style: GoogleFonts.poppins(
+                                                  color: Colors.white,
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                '${event['event_type'] ?? 'Unknown Genre'} • $formattedTime',
+                                                style: GoogleFonts.poppins(
+                                                  color: Colors.white.withOpacity(0.8),
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                formattedDate,
+                                                style: GoogleFonts.poppins(
+                                                  color: Colors.white.withOpacity(0.6),
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Column(
+                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          children: [
+                                            // Event type badge
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue[700]?.withOpacity(0.3),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                event['event_type']?.toString().toUpperCase() ?? 'EVENT',
+                                                style: GoogleFonts.poppins(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
 
+                                          ],
+                                        ),
                                       ],
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+
                         );
                       }).toList(),
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:convert';
@@ -56,12 +58,6 @@ class _ContentPageState extends State<ContentPage> {
     loadInitialData();
   }
 
-  @override
-  void dispose() {
-    searchController.dispose();
-    searchFocusNode.dispose();
-    super.dispose();
-  }
 
   // Load initial data for all categories
   Future<void> loadInitialData() async {
@@ -254,9 +250,12 @@ class _ContentPageState extends State<ContentPage> {
   }
 
   // Get filtered items based on current selection
+  // Get filtered items based on current selection
+  // In your _ContentPageState class, update the filteredItems getter:
   List<dynamic> get filteredItems {
     List<dynamic> items = [];
 
+    // Get all items for the selected category
     if (selectedCategory == 'All') {
       items.addAll(cinema);
       items.addAll(concert);
@@ -267,28 +266,37 @@ class _ContentPageState extends State<ContentPage> {
       items = getEventsListForCategory(selectedCategory);
     }
 
-    // Apply search filter
-    if (searchQuery.isNotEmpty) {
+    // Debug print to verify items before filtering
+    debugPrint('Total items before search: ${items.length}');
+
+    // Apply search filter if there's a query
+    if (searchQuery.trim().isNotEmpty) {
+      final query = searchQuery.toLowerCase().trim();
       items = items.where((item) {
         final content = item['content'];
         if (content != null) {
           final title = content['title']?.toString().toLowerCase() ?? '';
-          final description = content['description']?.toString().toLowerCase() ?? '';
-          final eventType = item['event_type']?.toString().toLowerCase() ?? '';
-
-          return title.contains(searchQuery.toLowerCase()) ||
-              description.contains(searchQuery.toLowerCase()) ||
-              eventType.contains(searchQuery.toLowerCase());
+          // Debug print to see what's being compared
+          debugPrint('Comparing: "$title" with "$query"');
+          return title.contains(query);
         }
         return false;
       }).toList();
+
+      // Debug print after filtering
+      debugPrint('Items after search: ${items.length}');
     }
 
-    // Apply date filter (you can implement this based on your needs)
-    // For now, we'll just return the items as is
     return items;
   }
-
+  Timer? _searchDebounce;
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    searchController.dispose();
+    searchFocusNode.dispose();
+    super.dispose();
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -325,7 +333,7 @@ class _ContentPageState extends State<ContentPage> {
                             width: 1,
                           ),
                         ),
-                        child: TextField(
+                        child:TextField(
                           controller: searchController,
                           focusNode: searchFocusNode,
                           style: GoogleFonts.poppins(
@@ -350,6 +358,7 @@ class _ContentPageState extends State<ContentPage> {
                                   isSearching = false;
                                   searchController.clear();
                                   searchQuery = '';
+                                  debugPrint('Search cleared'); // Debug print
                                 });
                               },
                             ),
@@ -357,11 +366,13 @@ class _ContentPageState extends State<ContentPage> {
                           onChanged: (value) {
                             setState(() {
                               searchQuery = value;
+                              debugPrint('Search query updated: "$value"'); // Debug print
                             });
                           },
                           onSubmitted: (value) {
                             setState(() {
                               searchQuery = value;
+                              debugPrint('Search submitted: "$value"'); // Debug print
                             });
                           },
                         ),

@@ -168,7 +168,6 @@ class _BasePageState extends State<BasePage> {
   }
 }
 
-// Popup Chat Widget
 class ChatPopup extends StatefulWidget {
   final ScrollController scrollController;
 
